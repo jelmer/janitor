@@ -1015,125 +1015,435 @@ impl DatabaseManager {
         let limit = limit.unwrap_or(50);
         let publishable_only = publishable_only.unwrap_or(false);
 
-        // Build dynamic query with relevance scoring
-        let mut query_parts = vec!["SELECT DISTINCT
-                c.name as codebase,
-                c.summary,
-                c.vcs_url,
-                r.suite as campaign,
-                r.result_code,
-                r.finish_time,
-                r.id as last_run_id,
-                CASE 
-                    WHEN c.name ILIKE $1 THEN 100
-                    WHEN c.summary ILIKE $2 THEN 50  
-                    WHEN c.name ILIKE $2 THEN 25
-                    ELSE 10
-                END as relevance_score
-             FROM codebase c
-             LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
-             WHERE NOT c.inactive"
-            .to_string()];
-
-        let mut param_count = 2; // $1 and $2 for search terms
-        let mut bind_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Postgres> + Send + Sync>> = vec![];
-
-        // Add search term filters
-        if let Some(term) = search_term {
-            bind_values.push(Box::new(format!("{}%", term))); // $1: prefix match
-            bind_values.push(Box::new(format!("%{}%", term))); // $2: contains match
-            query_parts
-                .push("AND (c.name ILIKE $1 OR c.name ILIKE $2 OR c.summary ILIKE $2)".to_string());
-        } else {
-            bind_values.push(Box::new("".to_string())); // $1: empty for no search
-            bind_values.push(Box::new("".to_string())); // $2: empty for no search
-        }
-
-        // Add campaign filter
-        if let Some(campaign_filter) = campaign {
-            param_count += 1;
-            query_parts.push(format!("AND r.suite = ${}", param_count));
-            bind_values.push(Box::new(campaign_filter.to_string()));
-        }
-
-        // Add result code filter
-        if let Some(code) = result_code {
-            param_count += 1;
-            query_parts.push(format!("AND r.result_code = ${}", param_count));
-            bind_values.push(Box::new(code.to_string()));
-        }
-
-        // Add publishable filter
-        if publishable_only {
-            query_parts.push("AND r.result_code = 'success'".to_string());
-        }
-
-        // Add ordering and limit
-        query_parts.push("ORDER BY relevance_score DESC, c.name ASC".to_string());
-        param_count += 1;
-        query_parts.push(format!("LIMIT ${}", param_count));
-        bind_values.push(Box::new(limit));
-
-        let query_str = query_parts.join(" ");
-
-        // For now, use a simpler query that we can actually execute
-        // TODO: Implement proper dynamic query building
-        let simplified_query = if let Some(term) = search_term {
-            sqlx::query(
-                "SELECT 
-                    c.name as codebase,
-                    c.summary,
-                    c.vcs_url,
-                    r.suite as campaign,
-                    r.result_code,
-                    r.finish_time,
-                    r.id as last_run_id
-                 FROM codebase c
-                 LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
-                 WHERE NOT c.inactive
-                 AND (c.name ILIKE $1 OR c.summary ILIKE $2)
-                 ORDER BY 
-                   CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
-                   c.name ASC
-                 LIMIT $3",
-            )
-            .bind(format!("{}%", term))
-            .bind(format!("%{}%", term))
-            .bind(limit)
-        } else {
-            sqlx::query(
-                "SELECT 
-                    c.name as codebase,
-                    c.summary,
-                    c.vcs_url,
-                    r.suite as campaign,
-                    r.result_code,
-                    r.finish_time,
-                    r.id as last_run_id
-                 FROM codebase c
-                 LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
-                 WHERE NOT c.inactive
-                 ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
-                 LIMIT $1",
-            )
-            .bind(limit)
+        // Build the query using a dynamic approach with pattern matching
+        let query_result = match (search_term, campaign, result_code, publishable_only) {
+            // Search term + campaign + result_code + publishable
+            (Some(term), Some(camp), Some(code), true) => {
+                sqlx::query(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.suite = $3
+                     AND r.result_code = $4
+                     AND r.result_code = 'success'
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $5"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    camp,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + campaign + result_code
+            (Some(term), Some(camp), Some(code), false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.suite = $3
+                     AND r.result_code = $4
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $5"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    camp,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + campaign + publishable
+            (Some(term), Some(camp), None, true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.suite = $3
+                     AND r.result_code = 'success'
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $4"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    camp,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + campaign
+            (Some(term), Some(camp), None, false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.suite = $3
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $4"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    camp,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + result_code + publishable
+            (Some(term), None, Some(code), true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.result_code = $3
+                     AND r.result_code = 'success'
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $4"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + result_code
+            (Some(term), None, Some(code), false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.result_code = $3
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $4"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term + publishable
+            (Some(term), None, None, true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     AND r.result_code = 'success'
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $3"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // Search term only
+            (Some(term), None, None, false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND (c.name ILIKE $1 OR c.summary ILIKE $2)
+                     ORDER BY 
+                       CASE WHEN c.name ILIKE $1 THEN 1 ELSE 2 END,
+                       c.name ASC
+                     LIMIT $3"#,
+                    format!("{}%", term),
+                    format!("%{}%", term),
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // No search term - other filters
+            (None, Some(camp), Some(code), true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.suite = $1
+                     AND r.result_code = $2
+                     AND r.result_code = 'success'
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $3"#,
+                    camp,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, Some(camp), Some(code), false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.suite = $1
+                     AND r.result_code = $2
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $3"#,
+                    camp,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, Some(camp), None, true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.suite = $1
+                     AND r.result_code = 'success'
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $2"#,
+                    camp,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, Some(camp), None, false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.suite = $1
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $2"#,
+                    camp,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, None, Some(code), true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.result_code = $1
+                     AND r.result_code = 'success'
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $2"#,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, None, Some(code), false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.result_code = $1
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $2"#,
+                    code,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            (None, None, None, true) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     AND r.result_code = 'success'
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $1"#,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
+            // No filters at all
+            (None, None, None, false) => {
+                sqlx::query!(
+                    r#"SELECT 
+                        c.name as codebase,
+                        c.summary,
+                        c.vcs_url,
+                        r.suite as campaign,
+                        r.result_code,
+                        r.finish_time,
+                        r.id as last_run_id
+                     FROM codebase c
+                     LEFT JOIN last_unabsorbed_runs r ON c.name = r.codebase
+                     WHERE NOT c.inactive
+                     ORDER BY r.finish_time DESC NULLS LAST, c.name ASC
+                     LIMIT $1"#,
+                    limit
+                )
+                .fetch_all(&self.pool)
+                .await?
+            }
         };
 
-        let rows = simplified_query.fetch_all(&self.pool).await?;
-
-        let mut results = Vec::new();
-        for row in rows {
-            let result = serde_json::json!({
-                "codebase": row.try_get::<String, _>("codebase")?,
-                "summary": row.try_get::<Option<String>, _>("summary")?,
-                "vcs_url": row.try_get::<Option<String>, _>("vcs_url")?,
-                "campaign": row.try_get::<Option<String>, _>("campaign")?,
-                "result_code": row.try_get::<Option<String>, _>("result_code")?,
-                "finish_time": row.try_get::<Option<DateTime<Utc>>, _>("finish_time")?,
-                "last_run_id": row.try_get::<Option<String>, _>("last_run_id")?
-            });
-            results.push(result);
-        }
+        // Convert query results to JSON
+        let results: Vec<serde_json::Value> = query_result
+            .into_iter()
+            .map(|row| {
+                serde_json::json!({
+                    "codebase": row.codebase,
+                    "summary": row.summary,
+                    "vcs_url": row.vcs_url,
+                    "campaign": row.campaign,
+                    "result_code": row.result_code,
+                    "finish_time": row.finish_time,
+                    "last_run_id": row.last_run_id
+                })
+            })
+            .collect();
 
         Ok(results)
     }
@@ -1141,6 +1451,7 @@ impl DatabaseManager {
     // Queue management methods for admin interface
 
     /// Get queue items with filtering and statistics
+    /// Now properly implements filtering with dynamic WHERE conditions
     pub async fn get_queue_items_with_stats(
         &self,
         suite: Option<&str>,
@@ -1149,34 +1460,108 @@ impl DatabaseManager {
         limit: Option<i64>,
         offset: Option<i64>,
     ) -> Result<(Vec<serde_json::Value>, serde_json::Value), DatabaseError> {
-        // TODO: Implement proper filtering - for now using basic query without filters
+        let limit = limit.unwrap_or(50);
+        let offset = offset.unwrap_or(0);
+        
+        // Build dynamic query with proper filtering
+        let mut query_sql = "SELECT 
+            q.id,
+            q.codebase,
+            q.suite,
+            q.command,
+            q.context,
+            q.value as priority_value,
+            q.success_chance,
+            q.publish_policy,
+            q.status,
+            q.created_time,
+            q.assigned_time,
+            q.worker,
+            c.url as vcs_url,
+            c.branch,
+            c.vcs_type
+        FROM queue q
+        LEFT JOIN codebase c ON q.codebase = c.name
+        WHERE 1=1".to_string();
 
-        // For now, use a simple query without complex filtering
-        let rows = sqlx::query(
-            "SELECT 
-                q.id,
-                q.codebase,
-                q.suite,
-                q.command,
-                q.context,
-                q.value as priority_value,
-                q.success_chance,
-                q.publish_policy,
-                q.status,
-                q.created_time,
-                q.assigned_time,
-                q.worker,
-                c.url as vcs_url,
-                c.branch,
-                c.vcs_type
-             FROM queue q
-             LEFT JOIN codebase c ON q.codebase = c.name
-             ORDER BY q.value DESC, q.created_time ASC
-             LIMIT $1",
-        )
-        .bind(limit.unwrap_or(50))
-        .fetch_all(&self.pool)
-        .await?;
+        let mut param_index = 1;
+        let mut query_builder = sqlx::query(&query_sql);
+
+        // Add filtering conditions
+        if let Some(suite_filter) = suite {
+            query_sql.push_str(&format!(" AND q.suite = ${}", param_index));
+            query_builder = query_builder.bind(suite_filter);
+            param_index += 1;
+        }
+
+        if let Some(status_filter) = status {
+            query_sql.push_str(&format!(" AND q.status = ${}", param_index));
+            query_builder = query_builder.bind(status_filter);
+            param_index += 1;
+        }
+
+        if let Some(priority_filter) = priority {
+            // Priority can be filtered by ranges like "high", "medium", "low"
+            match priority_filter {
+                "high" => {
+                    query_sql.push_str(&format!(" AND q.value >= ${}", param_index));
+                    query_builder = query_builder.bind(80);
+                    param_index += 1;
+                }
+                "medium" => {
+                    query_sql.push_str(&format!(" AND q.value >= ${} AND q.value < ${}", param_index, param_index + 1));
+                    query_builder = query_builder.bind(20).bind(80);
+                    param_index += 2;
+                }
+                "low" => {
+                    query_sql.push_str(&format!(" AND q.value < ${}", param_index));
+                    query_builder = query_builder.bind(20);
+                    param_index += 1;
+                }
+                _ => {
+                    // If it's a specific value, try to parse it
+                    if let Ok(value) = priority_filter.parse::<i32>() {
+                        query_sql.push_str(&format!(" AND q.value = ${}", param_index));
+                        query_builder = query_builder.bind(value);
+                        param_index += 1;
+                    }
+                }
+            }
+        }
+
+        // Add ordering and pagination
+        query_sql.push_str(" ORDER BY q.value DESC, q.created_time ASC");
+        query_sql.push_str(&format!(" LIMIT ${} OFFSET ${}", param_index, param_index + 1));
+        query_builder = query_builder.bind(limit).bind(offset);
+
+        // Update query with the final SQL
+        let query_sql_final = query_sql;
+        let rows = sqlx::query(&query_sql_final);
+        
+        // Rebuild query with all bindings for execution
+        let mut final_query = sqlx::query(&query_sql_final);
+        
+        if let Some(suite_filter) = suite {
+            final_query = final_query.bind(suite_filter);
+        }
+        if let Some(status_filter) = status {
+            final_query = final_query.bind(status_filter);
+        }
+        if let Some(priority_filter) = priority {
+            match priority_filter {
+                "high" => final_query = final_query.bind(80),
+                "medium" => final_query = final_query.bind(20).bind(80),
+                "low" => final_query = final_query.bind(20),
+                _ => {
+                    if let Ok(value) = priority_filter.parse::<i32>() {
+                        final_query = final_query.bind(value);
+                    }
+                }
+            }
+        }
+        final_query = final_query.bind(limit).bind(offset);
+        
+        let rows = final_query.fetch_all(&self.pool).await?;
 
         let mut items = Vec::new();
         for row in rows {
@@ -1780,6 +2165,9 @@ impl DatabaseManager {
                 None
             };
 
+            // Get campaign description if available
+            let description = self.get_campaign_description(&campaign_name).await.ok();
+
             campaigns.push(super::api::schemas::CampaignStatus {
                 name: campaign_name,
                 total_candidates: row.try_get("total_candidates")?,
@@ -1787,11 +2175,51 @@ impl DatabaseManager {
                 active_runs: row.try_get("active_runs")?,
                 success_rate,
                 last_updated: row.try_get("last_updated")?,
-                description: None, // TODO: Add campaign descriptions if available
+                description,
             });
         }
 
         Ok(campaigns)
+    }
+
+    /// Get campaign description from configuration or database
+    /// Currently returns hardcoded descriptions for known campaigns
+    /// TODO: This could be enhanced to read from a campaign_config table or external source
+    pub async fn get_campaign_description(&self, campaign_name: &str) -> Result<String, DatabaseError> {
+        // For now, provide common campaign descriptions
+        // This could be replaced with a database lookup or config file read
+        let description = match campaign_name {
+            "lintian-fixes" => "Automated fixes for common Lintian issues in Debian packages",
+            "upstream-metadata" => "Addition of upstream metadata to package control files",
+            "multiarch-fixes" => "Automated fixes for Multi-Arch compliance issues",
+            "fresh-snapshots" => "Updates to fresh upstream snapshots",
+            "unstable" => "General maintenance and fixes for packages in unstable",
+            "experimental" => "Experimental changes and testing",
+            "orphan-fixes" => "Fixes for orphaned packages",
+            "new-upstream" => "Updates to new upstream versions",
+            "dep3-fixes" => "Addition or correction of DEP-3 headers in patches",
+            "unreleased-changelog-fixes" => "Fixes for unreleased changelog entries",
+            _ => {
+                // Try to get description from database if there's a custom campaign entry
+                // For now, check if there's any description in the run table for this campaign
+                if let Ok(row) = sqlx::query(
+                    "SELECT DISTINCT description FROM run WHERE suite = $1 AND description IS NOT NULL LIMIT 1"
+                )
+                .bind(campaign_name)
+                .fetch_optional(&self.pool)
+                .await? {
+                    if let Some(row) = row {
+                        if let Ok(desc) = row.try_get::<String, _>("description") {
+                            return Ok(desc);
+                        }
+                    }
+                }
+                // Fallback description
+                &format!("Automated improvements for {}", campaign_name)
+            }
+        };
+        
+        Ok(description.to_string())
     }
 
     /// Get comprehensive campaign statistics in a single optimized query

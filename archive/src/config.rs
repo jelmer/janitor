@@ -68,6 +68,9 @@ pub struct ArchiveConfig {
     pub cache: CacheConfig,
     /// Server configuration.
     pub server: ServerConfig,
+    /// Default architectures for repositories (when not specified per-repository).
+    #[serde(default)]
+    pub default_architectures: Option<Vec<String>>,
 }
 
 /// Artifact manager configuration.
@@ -130,6 +133,7 @@ impl Default for ArchiveConfig {
             database: DatabaseConfig::default(),
             cache: CacheConfig::default(),
             server: ServerConfig::default(),
+            default_architectures: None,
         }
     }
 }

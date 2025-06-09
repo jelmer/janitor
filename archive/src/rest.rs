@@ -378,11 +378,17 @@ async fn write_suite_files(
 
 /// Get supported architectures from configuration
 pub fn get_supported_architectures(config: &crate::config::ArchiveConfig) -> Vec<String> {
-    // Get architectures from the first configured repository, or use defaults
+    // Check if there's a global default_architectures setting first
+    if let Some(ref default_architectures) = config.default_architectures {
+        return default_architectures.clone();
+    }
+    
+    // Get architectures from the first configured repository
     if let Some((_, repo_config)) = config.repositories.iter().next() {
         repo_config.architectures.clone()
     } else {
-        // Default architectures if no repositories configured
+        // Only fall back to hardcoded defaults if no configuration is available
+        tracing::warn!("No architectures configured, using default set: amd64, all");
         vec!["amd64".to_string(), "all".to_string()]
     }
 }
