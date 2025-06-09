@@ -64,7 +64,7 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 - [ ] **Jenkins backchannel implementation** - Has TODO markers for specific features
 
 ### Publish Service (publish/src/)
-- [ ] **Keep tombstone when removing merge proposal entries** (web.rs:991)
+- [x] **Keep tombstone when removing merge proposal entries** ✅ **COMPLETED**
 - [ ] **Edge case handling** in publish_one.rs (noted but not fully implemented)
 
 ### Site Service - Authentication (site/src/auth/)
@@ -75,10 +75,11 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 ## 🏗️ INFRASTRUCTURE - Monitoring & Admin
 
 ### Site Service - Administrative Operations
-- [ ] **System configuration endpoints** (api/routes.rs:1489)
-- [ ] **Worker administration endpoints** (api/routes.rs:1520)
+- [x] **System configuration endpoints** ✅ **COMPLETED**
+- [x] **Worker administration endpoints** ✅ **COMPLETED**
 
 ### Database Operations (site/src/database.rs)
+- [x] **Fix SQLx compilation errors and query syntax** ✅ **COMPLETED**
 - [ ] **Implement proper dynamic query building** for search_packages_advanced() (Line 1032)
 - [ ] **Implement proper filtering** in get_queue_items_with_stats() (Lines 1104-1106)
 - [ ] **Add campaign descriptions** in get_campaign_status_list() (Line 1742)
@@ -88,10 +89,10 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 ## 🔧 MEDIUM PRIORITY - Feature Enhancements
 
 ### Archive Service (archive/src/)
-- [ ] **Don't hardcode configuration values** (rest.rs:379)
+- [x] **Don't hardcode configuration values** ✅ **COMPLETED**
 
 ### Auto-Upload Service (auto-upload/src/)
-- [ ] **Handle parameter placeholders properly in queries** (database.rs:241)
+- [x] **Handle parameter placeholders properly in queries** ✅ **COMPLETED**
 
 ### Publish Service - State Management
 - [ ] **Use codebase table** (state.rs:158)

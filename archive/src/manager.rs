@@ -640,6 +640,7 @@ mod tests {
             database: crate::config::DatabaseConfig::default(),
             cache: crate::config::CacheConfig::default(),
             server: crate::config::ServerConfig::default(),
+            default_architectures: None,
         };
 
         // Test would continue with full setup when dependencies are available
