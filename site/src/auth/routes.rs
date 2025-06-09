@@ -4,7 +4,6 @@ use std::sync::Arc;
 use crate::auth::{
     handlers::{admin_handler, protected_handler, qa_handler, status_handler},
     middleware::{require_admin, require_login, AuthState},
-    session::SessionManager,
 };
 
 /// Create authentication routes (placeholder for full implementation)

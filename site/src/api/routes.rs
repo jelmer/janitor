@@ -16,7 +16,7 @@ use super::{
     middleware::{
         content_negotiation_middleware, cors_middleware, logging_middleware, metrics_middleware,
     },
-    schemas::{MergeProposal, Run, UpdateUserRoleRequest},
+    schemas::{Run, UpdateUserRoleRequest},
     types::{ApiResponse, CommonQuery, QueueStatus},
 };
 use crate::{app::AppState, auth::middleware::require_admin};
@@ -8857,7 +8857,7 @@ async fn get_system_resource_status() -> serde_json::Value {
 
         let used = mem_total.saturating_sub(mem_available);
         let usage_percent = if mem_total > 0 {
-            (used as f64 / mem_total as f64 * 100.0)
+            used as f64 / mem_total as f64 * 100.0
         } else {
             0.0
         };

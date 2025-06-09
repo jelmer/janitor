@@ -7,7 +7,7 @@ use tera::{Context, Tera, Value as TeraValue};
 use url::Url;
 
 use crate::{
-    auth::types::{SessionInfo, User, UserRole},
+    auth::types::{SessionInfo, UserRole},
     config::SiteConfig,
     database::DatabaseManager,
 };

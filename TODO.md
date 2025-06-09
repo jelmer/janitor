@@ -30,6 +30,8 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **Flash message system for user feedback (site/src/templates.rs, site/src/middleware.rs)** ✅ **COMPLETED**
 - **Enhanced template context with session-based authentication (site/src/templates.rs)** ✅ **COMPLETED**
 - **Session middleware with flash message and authentication integration (site/src/middleware.rs)** ✅ **COMPLETED**
+- **Implement database loading for suites and campaigns in templates (site/src/templates.rs)** ✅ **COMPLETED**
+- **Add admin user management endpoints to site API (site/src/api/routes.rs)** ✅ **COMPLETED**
 
 ---
 
