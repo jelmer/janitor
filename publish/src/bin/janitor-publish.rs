@@ -106,7 +106,8 @@ async fn main() -> Result<(), i32> {
 
     let forge_rate_limiter = std::sync::Arc::new(RwLock::new(HashMap::new()));
 
-    let vcs_managers = janitor::vcs::get_vcs_managers_from_config(config);
+    let vcs_managers = janitor::vcs::get_vcs_managers_from_config(config)
+        .expect("Failed to initialize VCS managers");
     let db = janitor::state::create_pool(config).await.map_err(|e| {
         log::error!("Failed to create database pool: {}", e);
         1

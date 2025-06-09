@@ -5,6 +5,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 
 use crate::{
     api::{negotiate_content_type, ContentType},
@@ -505,7 +506,7 @@ async fn fetch_run_for_review(state: &AppState, run_id: &str) -> anyhow::Result<
         "SELECT reviewer, verdict, comment, reviewed_at FROM review WHERE run_id = $1"
     )
     .bind(run_id)
-    .fetch_all(&state.database.pool())
+    .fetch_all(state.database.pool())
     .await?;
 
     let reviews: Vec<ReviewRecord> = review_rows.into_iter().map(|r| {
