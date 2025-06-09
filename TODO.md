@@ -95,9 +95,9 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 - [x] **Handle parameter placeholders properly in queries** ✅ **COMPLETED**
 
 ### Publish Service - State Management
-- [ ] **Use codebase table** (state.rs:158)
+- [x] **Use codebase table** ✅ **COMPLETED** (Already using codebase table in queries)
 - [ ] **Implement custom decoder for unpublished_branches array** (state.rs:382)
-- [ ] **Keep tombstone when removing entries** (web.rs:979)
+- [x] **Keep tombstone when removing entries** ✅ **COMPLETED** (Already implemented)
 - [ ] **Include forge rate limits** (web.rs:1489)
 - [ ] **Check if changes were applied manually** (proposal_info.rs:159)
 - [ ] **Check if change_set should be marked as published** (proposal_info.rs:221)
