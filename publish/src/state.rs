@@ -434,13 +434,11 @@ pub async fn iter_publish_ready(
         // Note: We keep revision IDs as strings in the database, and convert to RevisionId when needed
         let unpublished_branches: Vec<UnpublishedBranch> = if let Ok(branches_data) = row.try_get::<Vec<(String, Option<String>, Option<String>, Option<String>, Option<String>, Option<i32>)>, _>("unpublished_branches") {
             branches_data.into_iter().map(|(role, remote_name, base_revision_str, revision_str, mode, max_frequency_days)| {
-                // RevisionId doesn't have a public constructor from string, so we'll need to work around this
-                // For now, we'll store empty RevisionIds and rely on other parts of the code to handle this
                 UnpublishedBranch {
                     role,
                     remote_name,
-                    base_revision: None, // TODO: Convert from base_revision_str when RevisionId API allows
-                    revision: None, // TODO: Convert from revision_str when RevisionId API allows
+                    base_revision: base_revision_str.map(|s| RevisionId::from(s.as_bytes().to_vec())),
+                    revision: revision_str.map(|s| RevisionId::from(s.as_bytes().to_vec())),
                     publish_mode: mode,
                     max_frequency_days,
                     name: None, // name is not part of the result_branch_with_policy type
