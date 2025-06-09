@@ -45,7 +45,15 @@ pub fn publish_one(
     request: &crate::PublishOneRequest,
     possible_transports: &mut Option<Vec<Transport>>,
 ) -> Result<(PublishOneResult, String), PublishError> {
-    let mut args = shlex::split(&request.command).unwrap();
+    let mut args = match shlex::split(&request.command) {
+        Some(args) => args,
+        None => {
+            return Err(PublishError::Failure {
+                description: format!("Invalid command syntax: {}", request.command),
+                code: "invalid-command-syntax".to_string(),
+            });
+        }
+    };
     drop_env(&mut args);
 
     let mut source_branch = match open_branch(
@@ -56,7 +64,10 @@ pub fn publish_one(
     ) {
         Ok(branch) => branch,
         Err(BranchOpenError::RateLimited { description, .. }) => {
-            panic!("Local branch rate limited: {}", description);
+            return Err(PublishError::Failure {
+                description: format!("Local branch rate limited: {}", description),
+                code: "local-branch-rate-limited".to_string(),
+            });
         }
         Err(BranchOpenError::TemporarilyUnavailable { description, .. }) => {
             return Err(PublishError::Failure {
@@ -85,9 +96,18 @@ pub fn publish_one(
     };
 
     let temp_sprout = if is_remote_git_branch(source_branch.as_ref()) {
-        let sprout = silver_platter::utils::TempSprout::new(source_branch.as_ref(), None).unwrap();
-        source_branch = sprout.tree().branch();
-        Some(sprout)
+        match silver_platter::utils::TempSprout::new(source_branch.as_ref(), None) {
+            Ok(sprout) => {
+                source_branch = sprout.tree().branch();
+                Some(sprout)
+            }
+            Err(e) => {
+                return Err(PublishError::Failure {
+                    description: format!("Failed to create temporary branch sprout: {}", e),
+                    code: "temp-sprout-failed".to_string(),
+                });
+            }
+        }
     } else {
         None
     };
@@ -226,11 +246,29 @@ pub fn publish_one(
                     });
                 }
                 Err(e) => {
-                    panic!("Unexpected error: {}", e);
+                    return Err(PublishError::Failure {
+                        description: format!("Unable to retrieve merge proposal: {}", e),
+                        code: "merge-proposal-retrieval-failed".to_string(),
+                    });
+                }
+            };
+            let source_branch_url = match existing_proposal.get_source_branch_url() {
+                Ok(Some(url)) => url,
+                Ok(None) => {
+                    return Err(PublishError::Failure {
+                        description: "Merge proposal has no source branch URL".to_string(),
+                        code: "merge-proposal-no-source-url".to_string(),
+                    });
+                }
+                Err(e) => {
+                    return Err(PublishError::Failure {
+                        description: format!("Unable to get source branch URL: {}", e),
+                        code: "merge-proposal-source-url-failed".to_string(),
+                    });
                 }
             };
             let resume_branch = match open_branch(
-                &existing_proposal.get_source_branch_url().unwrap().unwrap(),
+                &source_branch_url,
                 possible_transports.as_mut(),
                 None,
                 None,
@@ -450,33 +488,74 @@ pub fn publish(
             .extend(codemod_result.as_object().unwrap().clone());
         vs["codemod"] = codemod_result.clone();
         if let Some(debdiff) = debdiff.as_ref() {
-            vs["debdiff"] = std::str::from_utf8(debdiff).unwrap().into();
+            match std::str::from_utf8(debdiff) {
+                Ok(debdiff_str) => {
+                    vs["debdiff"] = debdiff_str.into();
+                }
+                Err(e) => {
+                    log::warn!("Debdiff contains invalid UTF-8: {}", e);
+                    vs["debdiff"] = format!("(Binary diff - {} bytes)", debdiff.len()).into();
+                }
+            }
         }
-        let template = if description_format == DescriptionFormat::Markdown {
-            template_env.get_template(&format!("{}.md", campaign))
+        let template_name = if description_format == DescriptionFormat::Markdown {
+            format!("{}.md", campaign)
         } else {
-            template_env.get_template(&format!("{}.txt", campaign))
+            format!("{}.txt", campaign)
+        };
+        let template = match template_env.get_template(&template_name) {
+            Ok(template) => template,
+            Err(e) => {
+                log::warn!("Template {} not found: {}, using default", template_name, e);
+                // Return a simple default description
+                return format!("Changes for {} ({})", campaign, log_id);
+            }
+        };
+        match template.render(vs) {
+            Ok(rendered) => rendered,
+            Err(e) => {
+                log::warn!("Template rendering failed: {}, using default", e);
+                format!("Changes for {} ({})", campaign, log_id)
+            }
         }
-        .unwrap();
-        template.render(vs).unwrap()
     };
 
     let get_proposal_commit_message =
         |_existing_proposal: Option<&MergeProposal>| -> Option<String> {
-            commit_message_template.map(|commit_message_template| {
-                template_env
+            commit_message_template.and_then(|commit_message_template| {
+                match template_env
                     .render_named_str("commit_message", commit_message_template, codemod_result)
-                    .unwrap()
+                {
+                    Ok(rendered) => Some(rendered),
+                    Err(e) => {
+                        log::warn!("Commit message template rendering failed: {}", e);
+                        None
+                    }
+                }
             })
         };
 
     let get_proposal_title = |existing_proposal: Option<&MergeProposal>| -> Option<String> {
         if let Some(title_template) = title_template.as_ref() {
-            Some(
-                template_env
-                    .render_named_str("title", title_template, codemod_result)
-                    .unwrap(),
-            )
+            match template_env
+                .render_named_str("title", title_template, codemod_result)
+            {
+                Ok(rendered) => Some(rendered),
+                Err(e) => {
+                    log::warn!("Title template rendering failed: {}", e);
+                    // Fall back to determining title from description
+                    match determine_title(&get_proposal_description(
+                        DescriptionFormat::Plain,
+                        existing_proposal,
+                    )) {
+                        Ok(title) => Some(title),
+                        Err(e) => {
+                            log::warn!("Failed to determine fallback title: {}", e);
+                            Some(format!("Changes for {}", campaign))
+                        }
+                    }
+                }
+            }
         } else {
             match determine_title(&get_proposal_description(
                 DescriptionFormat::Plain,

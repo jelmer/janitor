@@ -65,7 +65,7 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 
 ### Publish Service (publish/src/)
 - [x] **Keep tombstone when removing merge proposal entries** ✅ **COMPLETED**
-- [ ] **Edge case handling** in publish_one.rs (noted but not fully implemented)
+- [x] **Edge case handling** in publish_one.rs ✅ **COMPLETED** - Replaced panic! calls with proper error handling
 
 ### Site Service - Authentication (site/src/auth/)
 - [x] **Complete OIDC integration** ✅ **COMPLETED**
