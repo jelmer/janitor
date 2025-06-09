@@ -61,7 +61,7 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 ## 🔥 HIGH PRIORITY - Critical System Functionality
 
 ### Worker Service (worker/src/)
-- [ ] **Jenkins backchannel implementation** - Has TODO markers for specific features
+- [x] **Jenkins backchannel implementation** ✅ **COMPLETED** - HTTP endpoints for kill/terminate/status
 
 ### Publish Service (publish/src/)
 - [x] **Keep tombstone when removing merge proposal entries** ✅ **COMPLETED**
