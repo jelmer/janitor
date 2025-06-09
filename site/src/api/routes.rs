@@ -16,7 +16,7 @@ use super::{
     middleware::{
         content_negotiation_middleware, cors_middleware, logging_middleware, metrics_middleware,
     },
-    schemas::{Run, UpdateUserRoleRequest},
+    schemas::{BulkUserOperationRequest, Run, UpdateUserRoleRequest},
     types::{ApiResponse, CommonQuery, QueueStatus},
 };
 use crate::{app::AppState, auth::middleware::require_admin};
@@ -48,6 +48,7 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
         .route("/users/:user_id", get(admin_get_user_details))
         .route("/users/:user_id/role", put(admin_update_user_role))
         .route("/users/:user_id/sessions", delete(admin_revoke_user_sessions))
+        .route("/users/bulk", post(admin_bulk_user_operations))
         .route("/sessions", get(admin_list_sessions))
         .route("/sessions/:session_id", delete(admin_revoke_session))
         // Campaign management endpoints
@@ -3488,6 +3489,103 @@ async fn admin_revoke_user_sessions(
                 &headers,
                 &format!("/api/admin/users/{}/sessions", user_id),
             )
+        }
+    }
+}
+
+/// Execute bulk operations on multiple users
+#[utoipa::path(
+    post,
+    path = "/admin/users/bulk",
+    tag = "admin",
+    request_body = BulkUserOperationRequest,
+    responses(
+        (status = 200, description = "Bulk operation completed successfully", body = ApiResponse<serde_json::Value>),
+        (status = 400, description = "Invalid operation or parameters"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_bulk_user_operations(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<BulkUserOperationRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!(
+        "Admin bulk user operation requested: {} on {} users",
+        request.operation,
+        request.user_ids.len()
+    );
+
+    // Validate request
+    if request.user_ids.is_empty() {
+        let error_response = ApiResponse::<serde_json::Value> {
+            data: None,
+            error: Some("invalid_request".to_string()),
+            reason: Some("No user IDs provided".to_string()),
+            details: None,
+            pagination: None,
+        };
+        return negotiate_response(error_response, &headers, "/api/admin/users/bulk");
+    }
+
+    // Execute bulk operation
+    match app_state
+        .database
+        .execute_bulk_user_operation(
+            &request.operation,
+            &request.user_ids,
+            request.parameters.as_ref(),
+        )
+        .await
+    {
+        Ok(results) => {
+            // Add metadata to the results
+            let enhanced_results = json!({
+                "operation": request.operation,
+                "user_ids": request.user_ids,
+                "parameters": request.parameters,
+                "results": results,
+                "executed_at": chrono::Utc::now(),
+                "executed_by": request.requester.clone().unwrap_or_else(|| "system".to_string())
+            });
+
+            info!(
+                "Bulk operation '{}' completed on {} users by {}",
+                request.operation,
+                request.user_ids.len(),
+                request.requester.unwrap_or_else(|| "system".to_string())
+            );
+
+            negotiate_response(
+                ApiResponse::success(enhanced_results),
+                &headers,
+                "/api/admin/users/bulk",
+            )
+        }
+        Err(e) => {
+            warn!("Failed to execute bulk operation: {}", e);
+            
+            let (error_code, reason) = match e {
+                crate::database::DatabaseError::InvalidInput(msg) => ("invalid_input", msg),
+                _ => (
+                    "operation_failed",
+                    format!("Failed to execute bulk operation: {}", e),
+                ),
+            };
+
+            let error_response = ApiResponse::<serde_json::Value> {
+                data: None,
+                error: Some(error_code.to_string()),
+                reason: Some(reason),
+                details: Some(json!({
+                    "operation": request.operation,
+                    "user_count": request.user_ids.len(),
+                    "parameters": request.parameters
+                })),
+                pagination: None,
+            };
+
+            negotiate_response(error_response, &headers, "/api/admin/users/bulk")
         }
     }
 }

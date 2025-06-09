@@ -2276,6 +2276,157 @@ impl DatabaseManager {
         Ok(result.rows_affected() > 0)
     }
 
+    // ============================================================================
+    // Bulk User Management Operations
+    // ============================================================================
+
+    /// Bulk revoke sessions for multiple users
+    pub async fn bulk_revoke_sessions(
+        &self,
+        user_ids: &[String],
+    ) -> Result<HashMap<String, u64>, DatabaseError> {
+        let mut results = HashMap::new();
+        
+        for user_id in user_ids {
+            let count = self.revoke_user_sessions(user_id).await?;
+            results.insert(user_id.clone(), count);
+        }
+        
+        Ok(results)
+    }
+
+    /// Bulk update role for multiple users
+    pub async fn bulk_update_role(
+        &self,
+        user_ids: &[String],
+        new_role: &str,
+    ) -> Result<HashMap<String, bool>, DatabaseError> {
+        let mut results = HashMap::new();
+        
+        // Validate role
+        if !["Admin", "QaReviewer", "User"].contains(&new_role) {
+            return Err(DatabaseError::InvalidInput(format!(
+                "Invalid role: {}. Must be Admin, QaReviewer, or User",
+                new_role
+            )));
+        }
+        
+        for user_id in user_ids {
+            let updated = self.update_user_role(user_id, new_role).await?;
+            results.insert(user_id.clone(), updated);
+        }
+        
+        Ok(results)
+    }
+
+    /// Bulk deactivate users (soft delete by expiring all sessions)
+    pub async fn bulk_deactivate_users(
+        &self,
+        user_ids: &[String],
+    ) -> Result<HashMap<String, u64>, DatabaseError> {
+        // For now, deactivating means revoking all sessions
+        // In a full implementation, this might also set a flag in a users table
+        self.bulk_revoke_sessions(user_ids).await
+    }
+
+    /// Bulk reset sessions (force re-authentication)
+    pub async fn bulk_reset_sessions(
+        &self,
+        user_ids: &[String],
+        hours_until_expiry: i64,
+    ) -> Result<HashMap<String, u64>, DatabaseError> {
+        let mut results = HashMap::new();
+        
+        let query = r#"
+            UPDATE site_session 
+            SET expires_at = NOW() + INTERVAL '$2 hours'
+            WHERE user_id = $1 AND expires_at > NOW()
+        "#;
+        
+        for user_id in user_ids {
+            let result = sqlx::query(query)
+                .bind(user_id)
+                .bind(hours_until_expiry)
+                .execute(&self.pool)
+                .await?;
+            
+            results.insert(user_id.clone(), result.rows_affected());
+        }
+        
+        Ok(results)
+    }
+
+    /// Execute a bulk operation on users with proper error handling
+    pub async fn execute_bulk_user_operation(
+        &self,
+        operation: &str,
+        user_ids: &[String],
+        parameters: Option<&serde_json::Value>,
+    ) -> Result<serde_json::Value, DatabaseError> {
+        match operation {
+            "revoke_sessions" => {
+                let results = self.bulk_revoke_sessions(user_ids).await?;
+                Ok(json!({
+                    "operation": "revoke_sessions",
+                    "results": results,
+                    "summary": {
+                        "total_users": user_ids.len(),
+                        "total_sessions_revoked": results.values().sum::<u64>()
+                    }
+                }))
+            }
+            "update_role" => {
+                let role = parameters
+                    .and_then(|p| p.get("role"))
+                    .and_then(|r| r.as_str())
+                    .ok_or_else(|| DatabaseError::InvalidInput("Missing 'role' parameter".to_string()))?;
+                
+                let results = self.bulk_update_role(user_ids, role).await?;
+                Ok(json!({
+                    "operation": "update_role",
+                    "new_role": role,
+                    "results": results,
+                    "summary": {
+                        "total_users": user_ids.len(),
+                        "successfully_updated": results.values().filter(|&&v| v).count()
+                    }
+                }))
+            }
+            "deactivate_users" => {
+                let results = self.bulk_deactivate_users(user_ids).await?;
+                Ok(json!({
+                    "operation": "deactivate_users",
+                    "results": results,
+                    "summary": {
+                        "total_users": user_ids.len(),
+                        "total_sessions_revoked": results.values().sum::<u64>()
+                    }
+                }))
+            }
+            "reset_sessions" => {
+                let hours = parameters
+                    .and_then(|p| p.get("hours_until_expiry"))
+                    .and_then(|h| h.as_i64())
+                    .unwrap_or(1); // Default to 1 hour
+                
+                let results = self.bulk_reset_sessions(user_ids, hours).await?;
+                Ok(json!({
+                    "operation": "reset_sessions",
+                    "hours_until_expiry": hours,
+                    "results": results,
+                    "summary": {
+                        "total_users": user_ids.len(),
+                        "total_sessions_reset": results.values().sum::<u64>()
+                    }
+                }))
+            }
+            _ => Err(DatabaseError::InvalidInput(format!(
+                "Unknown operation: {}. Supported operations: revoke_sessions, update_role, deactivate_users, reset_sessions",
+                operation
+            )))
+        }
+    }
+
     /// Get list of available campaigns from the database
     pub async fn get_campaigns(&self) -> Result<Vec<String>, DatabaseError> {
         let query = r#"
