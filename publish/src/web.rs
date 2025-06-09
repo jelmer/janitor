@@ -1335,6 +1335,18 @@ struct BlockerProposeRateLimitDetails {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+struct BlockerForgeRateLimitDetails {
+    /// Rate limit remaining for the forge API
+    remaining: Option<usize>,
+    /// Total rate limit quota for the forge API
+    limit: Option<usize>,
+    /// When rate limit resets (UTC timestamp)
+    reset_time: Option<chrono::DateTime<chrono::Utc>>,
+    /// Forge hostname (e.g., "github.com")
+    forge_host: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 struct BlockerChangeSetDetails {
     change_set_id: String,
     change_set_state: String,
@@ -1354,30 +1366,62 @@ struct BlockerInfo {
     publish_status: Blocker<BlockerPublishStatusDetails>,
     backoff: Blocker<BlockerBackoffDetails>,
     propose_rate_limit: Blocker<BlockerProposeRateLimitDetails>,
+    forge_rate_limit: Blocker<BlockerForgeRateLimitDetails>,
     change_set: Blocker<BlockerChangeSetDetails>,
     previous_mp: Blocker<Vec<BlockerPreviousMpDetails>>,
+}
+
+#[derive(sqlx::FromRow)]
+struct RunDetails {
+    id: String,
+    codebase: String,
+    campaign: String,
+    finish_time: chrono::DateTime<chrono::Utc>,
+    run_command: String,
+    publish_status: String,
+    rate_limit_bucket: Option<String>,
+    revision: Option<breezyshim::RevisionId>,
+    policy_command: String,
+    result_code: String,
+    change_set_state: String,
+    change_set: String,
+    inactive: bool,
+}
+
+/// Check forge rate limits for a given run
+/// Currently a placeholder implementation until external forge APIs are integrated
+async fn check_forge_rate_limits(run: &RunDetails) -> Blocker<BlockerForgeRateLimitDetails> {
+    // Extract forge host from target branch URL or merge proposal URLs
+    let forge_host = run.revision.as_ref()
+        .and_then(|_| {
+            // TODO: When external forge API integration is complete, extract the forge host 
+            // from the run's target repository URL or merge proposal URLs
+            // For now, return None to indicate unknown forge
+            None::<String>
+        });
+
+    // TODO: When external forge APIs are implemented, this should:
+    // 1. Determine the forge type (GitHub, GitLab, etc.) from the host
+    // 2. Make API calls to check rate limit status for that forge
+    // 3. Parse the response headers (X-RateLimit-Remaining, X-RateLimit-Limit, etc.)
+    // 4. Return actual rate limit information
+    //
+    // For now, we assume no rate limiting issues (result: true) since we can't check
+    Blocker {
+        result: true, // Assume OK since we can't check external APIs yet
+        details: BlockerForgeRateLimitDetails {
+            remaining: None,
+            limit: None,
+            reset_time: None,
+            forge_host,
+        },
+    }
 }
 
 async fn get_blockers(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    #[derive(sqlx::FromRow)]
-    struct RunDetails {
-        id: String,
-        codebase: String,
-        campaign: String,
-        finish_time: chrono::DateTime<chrono::Utc>,
-        run_command: String,
-        publish_status: String,
-        rate_limit_bucket: Option<String>,
-        revision: Option<breezyshim::RevisionId>,
-        policy_command: String,
-        result_code: String,
-        change_set_state: String,
-        change_set: String,
-        inactive: bool,
-    }
 
     let run = sqlx::query_as::<_, RunDetails>(
         r#"""
@@ -1419,6 +1463,9 @@ WHERE run.id = $1
             })),
         );
     };
+
+    // Check forge rate limits - currently placeholder until external APIs are implemented
+    let forge_rate_limit = check_forge_rate_limits(&run).await;
 
     #[derive(sqlx::FromRow)]
     struct ReviewDetails {
@@ -1499,8 +1546,6 @@ WHERE run.id = $1
         },
     };
 
-    // TODO(jelmer): include forge rate limits?
-
     let propose_rate_limit = {
         if let Some(bucket) = run.rate_limit_bucket {
             let open = state
@@ -1567,6 +1612,7 @@ WHERE run.id = $1
                 publish_status,
                 backoff,
                 propose_rate_limit,
+                forge_rate_limit,
             })
             .unwrap(),
         ),
