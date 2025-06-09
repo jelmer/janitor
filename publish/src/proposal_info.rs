@@ -174,9 +174,69 @@ impl ProposalInfoManager {
         can_be_merged: Option<bool>,
         rate_limit_bucket: Option<&str>,
     ) -> Result<(), sqlx::Error> {
-        if status == MergeProposalStatus::Closed {
-            // TODO(jelmer): Check if changes were applied manually and mark as applied rather than closed?
-        }
+        // If the proposal is closed, check if changes were applied manually
+        let effective_status = if status == MergeProposalStatus::Closed && revision.is_some() {
+            // Check if this revision was eventually merged into the target branch
+            // by looking for any merge proposals with the same revision that are marked as merged
+            let revision_str = revision.as_ref().unwrap().to_string();
+            let is_manually_applied = sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT EXISTS (
+                    SELECT 1 FROM merge_proposal 
+                    WHERE revision = $1 
+                    AND target_branch_url = $2
+                    AND status = 'merged'
+                    AND url != $3
+                )"#,
+            )
+            .bind(&revision_str)
+            .bind(target_branch_url.to_string())
+            .bind(mp.url().unwrap_or_else(|_| url::Url::parse("unknown://unknown").unwrap()).to_string())
+            .fetch_one(&self.conn)
+            .await
+            .unwrap_or(false);
+            
+            if is_manually_applied {
+                log::info!(
+                    "Found another merged proposal with same revision, marking {} as merged instead of closed",
+                    mp.url().map(|u| u.to_string()).unwrap_or_else(|_| "unknown".to_string())
+                );
+                MergeProposalStatus::Merged
+            } else {
+                // Also check if there are successful runs after this one for the same codebase
+                // which might indicate the changes were applied
+                let changes_likely_applied = sqlx::query_scalar::<_, bool>(
+                    r#"
+                    SELECT EXISTS (
+                        SELECT 1 FROM run 
+                        WHERE codebase = $1 
+                        AND suite = $2
+                        AND result_code = 'success'
+                        AND finish_time > (
+                            SELECT finish_time FROM run WHERE revision = $3 LIMIT 1
+                        )
+                    )"#,
+                )
+                .bind(codebase)
+                .bind(campaign)
+                .bind(&revision_str)
+                .fetch_one(&self.conn)
+                .await
+                .unwrap_or(false);
+                
+                if changes_likely_applied {
+                    log::info!(
+                        "Found successful runs after this proposal, changes may have been applied manually for {}",
+                        mp.url().map(|u| u.to_string()).unwrap_or_else(|_| "unknown".to_string())
+                    );
+                    // Still mark as closed but log the possibility
+                }
+                
+                status
+            }
+        } else {
+            status
+        };
         let url = match mp.url() {
             Ok(url) => url,
             Err(e) => {
@@ -184,7 +244,7 @@ impl ProposalInfoManager {
                 return Err(sqlx::Error::RowNotFound);
             }
         };
-        let (merged_by, merged_by_url, merged_at) = if status == MergeProposalStatus::Merged {
+        let (merged_by, merged_by_url, merged_at) = if effective_status == MergeProposalStatus::Merged {
             let mp = mp.clone();
             tokio::task::spawn_blocking(move || {
                 let merged_by = match mp.get_merged_by() {
@@ -247,7 +307,7 @@ impl ProposalInfoManager {
                 "###,
         )
         .bind(url.to_string())
-        .bind(status.to_string())
+        .bind(effective_status.to_string())
         .bind(revision)
         .bind(merged_by.clone())
         .bind(merged_at)
@@ -259,7 +319,7 @@ impl ProposalInfoManager {
         .await?;
         if let Some(revision) = revision.as_ref() {
             sqlx::query(r#"UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2"#)
-                .bind(status == MergeProposalStatus::Merged)
+                .bind(effective_status == MergeProposalStatus::Merged)
                 .bind(revision)
                 .execute(&mut *tx)
                 .await?;
@@ -267,7 +327,42 @@ impl ProposalInfoManager {
 
         tx.commit().await?;
 
-        // TODO(jelmer): Check if the change_set should be marked as published
+        // If the merge proposal is merged, check if the entire change_set should be marked as published
+        if effective_status == MergeProposalStatus::Merged && revision.is_some() {
+            // Check if all branches in the change_set are now merged/absorbed
+            let all_branches_absorbed = sqlx::query_scalar::<_, bool>(
+                r#"
+                SELECT NOT EXISTS (
+                    SELECT 1 FROM new_result_branch rb
+                    INNER JOIN run ON run.revision = rb.revision
+                    WHERE run.change_set = (
+                        SELECT change_set FROM run WHERE revision = $1 LIMIT 1
+                    )
+                    AND rb.absorbed = false
+                )"#,
+            )
+            .bind(revision)
+            .fetch_one(&self.conn)
+            .await
+            .unwrap_or(false);
+
+            if all_branches_absorbed {
+                // Update the change_set state to 'published'
+                sqlx::query(
+                    r#"
+                    UPDATE change_set 
+                    SET state = 'published' 
+                    WHERE id = (
+                        SELECT change_set FROM run WHERE revision = $1 LIMIT 1
+                    ) AND state != 'published'"#,
+                )
+                .bind(revision)
+                .execute(&self.conn)
+                .await?;
+                
+                log::info!("All branches in change_set absorbed, marking as published");
+            }
+        }
 
         if let Some(redis) = self.redis.as_mut() {
             redis
@@ -277,7 +372,7 @@ impl ProposalInfoManager {
                         "url": url,
                         "target_branch_url": target_branch_url,
                         "rate_limit_bucket": rate_limit_bucket,
-                        "status": status,
+                        "status": effective_status,
                         "codebase": codebase,
                         "merged_by": merged_by,
                         "merged_by_url": merged_by_url,
