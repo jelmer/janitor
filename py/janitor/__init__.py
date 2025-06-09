@@ -26,6 +26,20 @@ __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))
 
 
+def get_core_schema() -> str:
+    """Return the core janitor database schema SQL."""
+    import pkg_resources
+
+    return pkg_resources.resource_string("janitor", "state.sql").decode("utf-8")
+
+
+def get_debian_schema() -> str:
+    """Return the Debian-specific database schema SQL."""
+    import pkg_resources
+
+    return pkg_resources.resource_string("janitor.debian", "debian.sql").decode("utf-8")
+
+
 def set_user_agent(user_agent):
     _mod_http.default_user_agent = lambda: user_agent
     _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
