@@ -592,3 +592,131 @@ mod tests {
         assert!(invalid_request.validate().is_err());
     }
 }
+
+// ============================================================================
+// Admin User Management Schemas
+// ============================================================================
+
+/// Request for updating user role
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct UpdateUserRoleRequest {
+    /// New role for the user (Admin, QaReviewer, User)
+    #[validate(custom(function = "validate_user_role"))]
+    pub role: String,
+}
+
+/// User information for admin endpoints
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AdminUserInfo {
+    /// User ID (subject identifier)
+    pub user_id: String,
+    
+    /// Email address
+    pub email: String,
+    
+    /// Display name
+    pub name: Option<String>,
+    
+    /// Preferred username
+    pub preferred_username: Option<String>,
+    
+    /// User groups
+    pub groups: Vec<String>,
+    
+    /// Current role
+    pub role: String,
+    
+    /// Last activity timestamp
+    pub last_activity: Option<DateTime<Utc>>,
+    
+    /// Session count
+    pub active_sessions: i32,
+}
+
+/// Session information for admin endpoints
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AdminSessionInfo {
+    /// Session ID
+    pub session_id: String,
+    
+    /// User ID
+    pub user_id: String,
+    
+    /// User email
+    pub user_email: String,
+    
+    /// Session creation time
+    pub created_at: DateTime<Utc>,
+    
+    /// Last activity time
+    pub last_activity: DateTime<Utc>,
+    
+    /// IP address
+    pub ip_address: Option<String>,
+    
+    /// User agent
+    pub user_agent: Option<String>,
+}
+
+/// Bulk user operation request
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct BulkUserOperationRequest {
+    /// User IDs to operate on
+    #[validate(length(min = 1, max = 100))]
+    pub user_ids: Vec<String>,
+    
+    /// Operation type (revoke_sessions, update_role, etc.)
+    #[validate(length(min = 1))]
+    pub operation: String,
+    
+    /// Additional parameters for the operation
+    pub parameters: Option<serde_json::Value>,
+    
+    /// Requester information
+    pub requester: Option<String>,
+}
+
+/// Custom validator for user roles
+fn validate_user_role(role: &str) -> Result<(), ValidationError> {
+    match role {
+        "Admin" | "QaReviewer" | "User" => Ok(()),
+        _ => Err(ValidationError::new("invalid_user_role")),
+    }
+}
+
+#[cfg(test)]
+mod admin_tests {
+    use super::*;
+
+    #[test]
+    fn test_update_user_role_validation() {
+        let valid_request = UpdateUserRoleRequest {
+            role: "Admin".to_string(),
+        };
+        assert!(valid_request.validate().is_ok());
+
+        let invalid_request = UpdateUserRoleRequest {
+            role: "SuperUser".to_string(),
+        };
+        assert!(invalid_request.validate().is_err());
+    }
+
+    #[test]
+    fn test_bulk_operation_validation() {
+        let valid_request = BulkUserOperationRequest {
+            user_ids: vec!["user1".to_string(), "user2".to_string()],
+            operation: "revoke_sessions".to_string(),
+            parameters: None,
+            requester: Some("admin@example.com".to_string()),
+        };
+        assert!(valid_request.validate().is_ok());
+
+        let invalid_request = BulkUserOperationRequest {
+            user_ids: vec![], // Empty list should fail
+            operation: "".to_string(),
+            parameters: None,
+            requester: None,
+        };
+        assert!(invalid_request.validate().is_err());
+    }
+}

@@ -83,7 +83,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 
 #### **Administrative Operations**  
 - [x] **Line 1658**: Add admin authentication middleware to admin API endpoints ✅ **COMPLETED**
-- [ ] **Line 1380**: Admin user management
+- [x] **Line 1380**: ✅ **COMPLETED** Admin user management endpoints registered and working
 - [ ] **Line 1414**: Bulk operations interface
 - [ ] **Line 1457**: Campaign management
 - [ ] **Line 1489**: System configuration 
@@ -124,7 +124,7 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [x] **Line 183**: ✅ **COMPLETED** Flash message system implemented with session integration and category filtering
 - [x] **Line 328**: ✅ **COMPLETED** Make OpenID configured flag dynamic - implemented `create_base_context_with_config()` 
 - [x] **Lines 337-339**: ✅ **COMPLETED** Get is_admin, is_qa_reviewer, and user from session - implemented `create_request_context_with_session()`
-- [ ] **Lines 342-343**: Load suites and campaigns from database (returns empty arrays) - requires database schema work
+- [x] **Lines 342-343**: ✅ **COMPLETED** Load suites and campaigns from database - implemented `create_request_context_with_database()` and database methods
 
 #### **Configuration Integration (site/src/config.rs)**
 - [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available for service URLs

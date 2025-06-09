@@ -2,7 +2,7 @@ use axum::{
     extract::{Json, Path, Query, State},
     http::HeaderMap,
     response::Json as ResponseJson,
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use serde::Deserialize;
@@ -16,7 +16,7 @@ use super::{
     middleware::{
         content_negotiation_middleware, cors_middleware, logging_middleware, metrics_middleware,
     },
-    schemas::{MergeProposal, Run},
+    schemas::{MergeProposal, Run, UpdateUserRoleRequest},
     types::{ApiResponse, CommonQuery, QueueStatus},
 };
 use crate::{app::AppState, auth::middleware::require_admin};
@@ -43,10 +43,13 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
             "/workers/:worker_id/tasks/:task_id",
             delete(admin_cancel_worker_task),
         )
-        // User management endpoints (read-only for now due to axum version conflicts)
+        // User management endpoints
         .route("/users", get(admin_list_users))
         .route("/users/:user_id", get(admin_get_user_details))
+        .route("/users/:user_id/role", put(admin_update_user_role))
+        .route("/users/:user_id/sessions", delete(admin_revoke_user_sessions))
         .route("/sessions", get(admin_list_sessions))
+        .route("/sessions/:session_id", delete(admin_revoke_session))
         // Campaign management endpoints
         .route("/campaigns", get(admin_list_campaigns))
         .route("/campaigns/:campaign_id", get(admin_get_campaign_details))
@@ -3181,11 +3184,6 @@ async fn admin_cancel_worker_task(
 // Admin User Management Endpoints
 // ============================================================================
 
-/// Request for updating user role
-#[derive(Debug, Deserialize)]
-struct UpdateUserRoleRequest {
-    role: String,
-}
 
 /// List all users with their roles and basic information
 #[utoipa::path(
@@ -3349,11 +3347,12 @@ async fn admin_get_user_details(
         (status = 403, description = "Insufficient permissions")
     )
 )]
+#[axum::debug_handler]
 async fn admin_update_user_role(
     State(app_state): State<Arc<AppState>>,
     Path(user_id): Path<String>,
-    Json(request): Json<UpdateUserRoleRequest>,
     headers: HeaderMap,
+    Json(request): Json<UpdateUserRoleRequest>,
 ) -> impl axum::response::IntoResponse {
     debug!(
         "Admin role update requested for user: {} to role: {}",
