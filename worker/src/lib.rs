@@ -188,6 +188,21 @@ pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_
         Ok(serde_json::Value::Null)
     } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
         Ok(serde_json::Value::Bool(b.is_true()))
+    } else if let Ok(i) = obj.downcast::<pyo3::types::PyInt>() {
+        // Try to extract as i64 first, then as u64, then as f64
+        if let Ok(val) = i.extract::<i64>() {
+            Ok(serde_json::Value::Number(serde_json::Number::from(val)))
+        } else if let Ok(val) = i.extract::<u64>() {
+            Ok(serde_json::Value::Number(serde_json::Number::from(val)))
+        } else if let Ok(val) = i.extract::<f64>() {
+            Ok(serde_json::Value::Number(
+                serde_json::Number::from_f64(val).unwrap_or_else(|| serde_json::Number::from(0)),
+            ))
+        } else {
+            Err(pyo3::exceptions::PyTypeError::new_err(
+                ("integer too large",),
+            ))
+        }
     } else if let Ok(f) = obj.downcast::<pyo3::types::PyFloat>() {
         Ok(serde_json::Value::Number(
             serde_json::Number::from_f64(f.value()).unwrap(),

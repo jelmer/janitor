@@ -26,6 +26,8 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - **Unused variable warnings fixed across codebase** ✅ **COMPLETED**
 - **Comprehensive test database utilities created (src/test_utils.rs, runner/src/test_utils.rs)** ✅ **COMPLETED**
 - **Mock implementations for artifacts and logs managers** ✅ **COMPLETED**
+- **Dynamic URL generation for templates (site/src/templates.rs:generate_url)** ✅ **COMPLETED**
+- **Flash message system for user feedback (site/src/templates.rs, site/src/middleware.rs)** ✅ **COMPLETED**
 
 ---
 
@@ -116,8 +118,8 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 - [ ] **Line 1742**: Add campaign descriptions in `get_campaign_status_list()`
 
 #### **Templates & UI (site/src/templates.rs)**
-- [ ] **Lines 169-171**: Implement actual URL generation based on routes (currently hardcoded)
-- [ ] **Line 183**: Implement flash message retrieval from session (returns empty array)
+- [x] **Lines 169-171**: ✅ **COMPLETED** Dynamic URL generation implemented with comprehensive route support
+- [x] **Line 183**: ✅ **COMPLETED** Flash message system implemented with session integration and category filtering
 - [ ] **Line 328**: Make OpenID configured flag dynamic (hardcoded as false)
 - [ ] **Lines 337-339**: Get is_admin, is_qa_reviewer, and user from session (all hardcoded)
 - [ ] **Lines 342-343**: Load suites and campaigns from database (returns empty arrays)
@@ -125,34 +127,34 @@ This document tracks unimplemented functionality, placeholder code, and TODO ite
 #### **Configuration Integration (site/src/config.rs)**
 - [ ] **Lines 384, 389, 394, 399, 410**: Check janitor config fields when available for service URLs
 
-#### **Cupboard Handlers - Mock Implementations (site/src/handlers/cupboard/)**
-These handlers currently return mock data instead of querying the database:
+#### **Cupboard Handlers - Database Integration (site/src/handlers/cupboard/)**
+✅ **COMPLETED**: All handlers now use real database queries instead of mock data:
 
 **Review Handler (review.rs)**
-- [ ] **Lines 393-401**: `fetch_review_queue()` - Returns mock data instead of database queries
-- [ ] **Lines 433-434**: `fetch_run_for_review()` - Returns mock ReviewItem data
-- [ ] **Lines 455-457**: `fetch_run_evaluation()` - Returns hardcoded JSON evaluation
-- [ ] **Lines 470-472**: `store_review_verdict()` - Only logs, doesn't store in database
-- [ ] **Lines 492-494, 504-506, 516-518, 528-530**: Bulk review actions not implemented
-- [ ] **Lines 547-549**: `fetch_review_statistics()` - Returns hardcoded statistics
-- [ ] **Lines 565-567**: `fetch_rejected_runs()` - Returns mock rejected run data
+- [x] **Lines 393-401**: ✅ **COMPLETED** `fetch_review_queue()` - Implemented with database queries to publish_ready view
+- [x] **Lines 433-434**: ✅ **COMPLETED** `fetch_run_for_review()` - Implemented with database queries
+- [x] **Lines 455-457**: ✅ **COMPLETED** `fetch_run_evaluation()` - Implemented with database queries
+- [x] **Lines 470-472**: ✅ **COMPLETED** `store_review_verdict()` - Implemented with database persistence
+- [x] **Lines 492-494, 504-506, 516-518, 528-530**: ✅ **COMPLETED** Bulk review actions implemented
+- [x] **Lines 547-549**: ✅ **COMPLETED** `fetch_review_statistics()` - Implemented with database queries
+- [x] **Lines 565-567**: ✅ **COMPLETED** `fetch_rejected_runs()` - Implemented with database queries
 
 **Publish Handler (publish.rs)**
-- [ ] **Lines 446-448**: `fetch_publish_dashboard_data()` - Returns mock PublishItem and statistics
-- [ ] **Lines 498-500**: `fetch_publish_history()` - Returns mock historical data
-- [ ] **Lines 518-520**: `fetch_publish_details()` - Returns mock PublishItem
-- [ ] **Lines 543-545**: `fetch_ready_runs()` - Returns mock ready run data
-- [ ] **Lines 563-565**: `execute_emergency_publish_action()` - Returns hardcoded counts
-- [ ] **Lines 591-593**: `apply_rate_limit_adjustment()` - Returns mock rate limit config
-- [ ] **Lines 617-619**: `fetch_publish_statistics()` - Returns hardcoded statistics
+- [x] **Lines 446-448**: ✅ **COMPLETED** `fetch_publish_dashboard_data()` - Implemented with database queries
+- [x] **Lines 498-500**: ✅ **COMPLETED** `fetch_publish_history()` - Implemented with database queries
+- [x] **Lines 518-520**: ✅ **COMPLETED** `fetch_publish_details()` - Implemented with database queries
+- [x] **Lines 543-545**: ✅ **COMPLETED** `fetch_ready_runs()` - Implemented with database queries
+- [x] **Lines 563-565**: ✅ **COMPLETED** `execute_emergency_publish_action()` - Implemented with database queries
+- [x] **Lines 591-593**: ✅ **COMPLETED** `apply_rate_limit_adjustment()` - Implemented with database queries
+- [x] **Lines 617-619**: ✅ **COMPLETED** `fetch_publish_statistics()` - Implemented with database queries
 
 **Queue Handler (queue.rs)**
-- [ ] **Lines 304-306**: `fetch_queue_item_details()` - Returns placeholder QueueItem
-- [ ] **Lines 326-328, 336-337, 339**: `fetch_queue_statistics()` - Partially implemented with TODOs for failed items, average wait time, worker utilization
-- [ ] **Lines 441-443**: Worker assignment not implemented in `execute_bulk_queue_operation()`
+- [x] **Lines 304-306**: ✅ **COMPLETED** `fetch_queue_item_details()` - Implemented with database queries
+- [x] **Lines 326-328, 336-337, 339**: ✅ **COMPLETED** `fetch_queue_statistics()` - Implemented with database queries
+- [x] **Lines 441-443**: ✅ **COMPLETED** Worker assignment implemented in `execute_bulk_queue_operation()`
 
 #### **API Middleware (site/src/api/middleware.rs)**
-- [ ] **Lines 270-277**: Rate limiting middleware is a stub that only logs, no actual rate limiting
+- [x] **Lines 270-277**: ✅ **COMPLETED** Rate limiting middleware fully implemented with Redis backend and in-memory fallback
 
 ---
 
