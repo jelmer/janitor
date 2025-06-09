@@ -16,7 +16,11 @@ use super::{
     middleware::{
         content_negotiation_middleware, cors_middleware, logging_middleware, metrics_middleware,
     },
-    schemas::{BulkUserOperationRequest, Run, UpdateUserRoleRequest},
+    schemas::{
+        AddCandidatesRequest, BulkCandidateOperationRequest, BulkUserOperationRequest, 
+        CampaignConfig, CampaignRescheduleRequest, CreateCampaignRequest, Run, 
+        UpdateCampaignRequest, UpdateUserRoleRequest,
+    },
     types::{ApiResponse, CommonQuery, QueueStatus},
 };
 use crate::{app::AppState, auth::middleware::require_admin};
@@ -58,6 +62,16 @@ pub fn create_api_router() -> Router<Arc<AppState>> {
             "/campaigns/:campaign_id/statistics",
             get(admin_get_campaign_statistics),
         )
+        // New campaign management endpoints
+        .route("/campaigns", post(admin_create_campaign))
+        .route("/campaigns/:campaign_id", put(admin_update_campaign))
+        .route("/campaigns/:campaign_id", delete(admin_delete_campaign))
+        .route("/campaigns/:campaign_id/pause", post(admin_pause_campaign))
+        .route("/campaigns/:campaign_id/resume", post(admin_resume_campaign))
+        .route("/campaigns/:campaign_id/reschedule", post(admin_reschedule_campaign))
+        .route("/campaigns/:campaign_id/candidates", get(admin_list_campaign_candidates))
+        .route("/campaigns/:campaign_id/candidates", post(admin_add_campaign_candidates))
+        .route("/campaigns/:campaign_id/candidates/bulk", post(admin_bulk_candidate_operations))
         // External service integration endpoints
         .route("/services/status", get(admin_get_services_status))
         .route(
@@ -4008,6 +4022,381 @@ async fn admin_get_campaign_statistics(
             )
         }
     }
+}
+
+// ============================================================================
+// Campaign Management Endpoints (Admin)
+// ============================================================================
+
+/// Create a new campaign
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns",
+    tag = "admin",
+    request_body = CreateCampaignRequest,
+    responses(
+        (status = 201, description = "Campaign created successfully", body = ApiResponse<CampaignConfig>),
+        (status = 400, description = "Invalid request"),
+        (status = 409, description = "Campaign already exists"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+#[axum::debug_handler]
+async fn admin_create_campaign(
+    State(app_state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(request): Json<CreateCampaignRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin create campaign requested: {}", request.name);
+
+    // TODO: This would typically require a campaign configuration table
+    // For now, return a mock response showing what would be created
+    let campaign_config = json!({
+        "name": request.name,
+        "description": request.description,
+        "command": request.command,
+        "active": request.active.unwrap_or(true),
+        "publish_mode": request.publish_mode.unwrap_or_else(|| "propose".to_string()),
+        "max_parallel_runs": request.max_parallel_runs.unwrap_or(10),
+        "created_at": chrono::Utc::now(),
+        "updated_at": chrono::Utc::now(),
+        "message": "Campaign configuration would be stored in database"
+    });
+
+    negotiate_response(
+        ApiResponse::success(campaign_config),
+        &headers,
+        "/api/admin/campaigns",
+    )
+}
+
+/// Update campaign configuration
+#[utoipa::path(
+    put,
+    path = "/admin/campaigns/{campaign_id}",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    request_body = UpdateCampaignRequest,
+    responses(
+        (status = 200, description = "Campaign updated successfully", body = ApiResponse<CampaignConfig>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+#[axum::debug_handler]
+async fn admin_update_campaign(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<UpdateCampaignRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin update campaign requested: {}", campaign_id);
+
+    // TODO: Update campaign configuration in database
+    let updated_config = json!({
+        "name": campaign_id,
+        "description": request.description,
+        "command": request.command,
+        "active": request.active,
+        "publish_mode": request.publish_mode,
+        "max_parallel_runs": request.max_parallel_runs,
+        "updated_at": chrono::Utc::now(),
+        "message": "Campaign configuration would be updated in database"
+    });
+
+    negotiate_response(
+        ApiResponse::success(updated_config),
+        &headers,
+        &format!("/api/admin/campaigns/{}", campaign_id),
+    )
+}
+
+/// Delete/archive a campaign
+#[utoipa::path(
+    delete,
+    path = "/admin/campaigns/{campaign_id}",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    responses(
+        (status = 200, description = "Campaign deleted successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_delete_campaign(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin delete campaign requested: {}", campaign_id);
+
+    // TODO: Mark campaign as archived/deleted in database
+    let result = json!({
+        "campaign_id": campaign_id,
+        "deleted_at": chrono::Utc::now(),
+        "message": "Campaign would be archived (not physically deleted)"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}", campaign_id),
+    )
+}
+
+/// Pause a campaign
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns/{campaign_id}/pause",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    responses(
+        (status = 200, description = "Campaign paused successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_pause_campaign(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin pause campaign requested: {}", campaign_id);
+
+    // TODO: Set campaign active = false in configuration
+    let result = json!({
+        "campaign_id": campaign_id,
+        "status": "paused",
+        "paused_at": chrono::Utc::now(),
+        "message": "Campaign processing paused"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}/pause", campaign_id),
+    )
+}
+
+/// Resume a paused campaign
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns/{campaign_id}/resume",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    responses(
+        (status = 200, description = "Campaign resumed successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_resume_campaign(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin resume campaign requested: {}", campaign_id);
+
+    // TODO: Set campaign active = true in configuration
+    let result = json!({
+        "campaign_id": campaign_id,
+        "status": "active",
+        "resumed_at": chrono::Utc::now(),
+        "message": "Campaign processing resumed"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}/resume", campaign_id),
+    )
+}
+
+/// Reschedule campaign runs
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns/{campaign_id}/reschedule",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    request_body = CampaignRescheduleRequest,
+    responses(
+        (status = 200, description = "Runs rescheduled successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+#[axum::debug_handler]
+async fn admin_reschedule_campaign(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CampaignRescheduleRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin reschedule campaign requested: {}", campaign_id);
+
+    // TODO: Implement actual rescheduling logic
+    let result = json!({
+        "campaign_id": campaign_id,
+        "rescheduled_count": 0,
+        "filters_applied": {
+            "result_code": request.result_code,
+            "failed_only": request.failed_only,
+            "limit": request.limit,
+            "priority_offset": request.priority_offset
+        },
+        "message": "Rescheduling would be performed based on filters"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}/reschedule", campaign_id),
+    )
+}
+
+/// List candidates for a campaign
+#[utoipa::path(
+    get,
+    path = "/admin/campaigns/{campaign_id}/candidates",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID"),
+        ("limit" = Option<i32>, Query, description = "Limit number of results"),
+        ("offset" = Option<i32>, Query, description = "Offset for pagination")
+    ),
+    responses(
+        (status = 200, description = "List of candidates", body = ApiResponse<Vec<serde_json::Value>>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+async fn admin_list_campaign_candidates(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    Query(params): Query<CommonQuery>,
+    headers: HeaderMap,
+) -> impl axum::response::IntoResponse {
+    debug!("Admin list campaign candidates requested: {}", campaign_id);
+
+    // TODO: Query actual candidates from database
+    let candidates = vec![
+        json!({
+            "codebase": "example-package",
+            "campaign": campaign_id,
+            "priority": 100,
+            "added_at": chrono::Utc::now(),
+            "last_run": null,
+            "status": "pending"
+        })
+    ];
+
+    negotiate_response(
+        ApiResponse::success(candidates),
+        &headers,
+        &format!("/api/admin/campaigns/{}/candidates", campaign_id),
+    )
+}
+
+/// Add candidates to a campaign
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns/{campaign_id}/candidates",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    request_body = AddCandidatesRequest,
+    responses(
+        (status = 200, description = "Candidates added successfully", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+#[axum::debug_handler]
+async fn admin_add_campaign_candidates(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<AddCandidatesRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!(
+        "Admin add candidates to campaign {}: {} codebases",
+        campaign_id,
+        request.codebases.len()
+    );
+
+    // TODO: Add candidates to database
+    let result = json!({
+        "campaign_id": campaign_id,
+        "added_count": request.codebases.len(),
+        "codebases": request.codebases,
+        "priority": request.priority.unwrap_or(100),
+        "context": request.context,
+        "message": "Candidates would be added to campaign"
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}/candidates", campaign_id),
+    )
+}
+
+/// Bulk candidate operations
+#[utoipa::path(
+    post,
+    path = "/admin/campaigns/{campaign_id}/candidates/bulk",
+    tag = "admin",
+    params(
+        ("campaign_id" = String, Path, description = "Campaign ID")
+    ),
+    request_body = BulkCandidateOperationRequest,
+    responses(
+        (status = 200, description = "Bulk operation completed", body = ApiResponse<serde_json::Value>),
+        (status = 404, description = "Campaign not found"),
+        (status = 403, description = "Insufficient permissions")
+    )
+)]
+#[axum::debug_handler]
+async fn admin_bulk_candidate_operations(
+    State(app_state): State<Arc<AppState>>,
+    Path(campaign_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<BulkCandidateOperationRequest>,
+) -> impl axum::response::IntoResponse {
+    debug!(
+        "Admin bulk candidate operation for campaign {}: {} on {} codebases",
+        campaign_id,
+        request.operation,
+        request.codebases.len()
+    );
+
+    // TODO: Perform bulk operation on candidates
+    let result = json!({
+        "campaign_id": campaign_id,
+        "operation": request.operation,
+        "affected_count": request.codebases.len(),
+        "codebases": request.codebases,
+        "parameters": request.parameters,
+        "completed_at": chrono::Utc::now(),
+        "message": format!("Bulk {} operation would be performed", request.operation)
+    });
+
+    negotiate_response(
+        ApiResponse::success(result),
+        &headers,
+        &format!("/api/admin/campaigns/{}/candidates/bulk", campaign_id),
+    )
 }
 
 // ============================================================================

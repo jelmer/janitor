@@ -720,3 +720,183 @@ mod admin_tests {
         assert!(invalid_request.validate().is_err());
     }
 }
+
+// ============================================================================
+// Campaign Management Schemas
+// ============================================================================
+
+/// Request for creating a new campaign
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateCampaignRequest {
+    /// Campaign name (must be unique)
+    #[validate(length(min = 1, max = 100))]
+    pub name: String,
+    
+    /// Campaign description
+    #[validate(length(max = 500))]
+    pub description: Option<String>,
+    
+    /// Command to run for this campaign
+    #[validate(length(min = 1, max = 1000))]
+    pub command: String,
+    
+    /// Whether the campaign should be active immediately
+    pub active: Option<bool>,
+    
+    /// Publishing mode (push, propose, etc.)
+    pub publish_mode: Option<String>,
+    
+    /// Maximum number of parallel runs
+    #[validate(range(min = 1, max = 100))]
+    pub max_parallel_runs: Option<i32>,
+}
+
+/// Request for updating campaign configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct UpdateCampaignRequest {
+    /// Campaign description
+    #[validate(length(max = 500))]
+    pub description: Option<String>,
+    
+    /// Command to run for this campaign
+    #[validate(length(max = 1000))]
+    pub command: Option<String>,
+    
+    /// Whether the campaign should be active
+    pub active: Option<bool>,
+    
+    /// Publishing mode
+    pub publish_mode: Option<String>,
+    
+    /// Maximum number of parallel runs
+    #[validate(range(min = 1, max = 100))]
+    pub max_parallel_runs: Option<i32>,
+}
+
+/// Request for adding candidates to a campaign
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct AddCandidatesRequest {
+    /// List of codebase names to add as candidates
+    #[validate(length(min = 1, max = 1000))]
+    pub codebases: Vec<String>,
+    
+    /// Priority for these candidates
+    pub priority: Option<i32>,
+    
+    /// Context information
+    pub context: Option<serde_json::Value>,
+}
+
+/// Request for bulk candidate operations
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct BulkCandidateOperationRequest {
+    /// Operation to perform (add, remove, update_priority)
+    #[validate(custom(function = "validate_candidate_operation"))]
+    pub operation: String,
+    
+    /// List of codebases to operate on
+    #[validate(length(min = 1, max = 1000))]
+    pub codebases: Vec<String>,
+    
+    /// Additional parameters for the operation
+    pub parameters: Option<serde_json::Value>,
+}
+
+/// Request for campaign reschedule
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CampaignRescheduleRequest {
+    /// Filter by result code
+    pub result_code: Option<String>,
+    
+    /// Only reschedule failed runs
+    pub failed_only: Option<bool>,
+    
+    /// Maximum number to reschedule
+    #[validate(range(min = 1, max = 10000))]
+    pub limit: Option<i32>,
+    
+    /// Priority offset
+    pub priority_offset: Option<i32>,
+}
+
+/// Campaign configuration details
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CampaignConfig {
+    /// Campaign name
+    pub name: String,
+    
+    /// Description
+    pub description: Option<String>,
+    
+    /// Command to execute
+    pub command: String,
+    
+    /// Whether campaign is active
+    pub active: bool,
+    
+    /// Publishing mode
+    pub publish_mode: String,
+    
+    /// Maximum parallel runs
+    pub max_parallel_runs: i32,
+    
+    /// Creation time
+    pub created_at: DateTime<Utc>,
+    
+    /// Last modified time
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Custom validator for candidate operations
+fn validate_candidate_operation(operation: &str) -> Result<(), ValidationError> {
+    match operation {
+        "add" | "remove" | "update_priority" => Ok(()),
+        _ => Err(ValidationError::new("invalid_candidate_operation")),
+    }
+}
+
+#[cfg(test)]
+mod campaign_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_create_campaign_validation() {
+        let valid_request = CreateCampaignRequest {
+            name: "test-campaign".to_string(),
+            description: Some("Test campaign".to_string()),
+            command: "python3 -m test_fixer".to_string(),
+            active: Some(true),
+            publish_mode: Some("propose".to_string()),
+            max_parallel_runs: Some(10),
+        };
+        assert!(valid_request.validate().is_ok());
+
+        let invalid_request = CreateCampaignRequest {
+            name: "".to_string(), // Empty name should fail
+            description: None,
+            command: "cmd".to_string(),
+            active: None,
+            publish_mode: None,
+            max_parallel_runs: Some(200), // Too high
+        };
+        assert!(invalid_request.validate().is_err());
+    }
+
+    #[test]
+    fn test_bulk_candidate_operation_validation() {
+        let valid_request = BulkCandidateOperationRequest {
+            operation: "add".to_string(),
+            codebases: vec!["pkg1".to_string(), "pkg2".to_string()],
+            parameters: Some(json!({"priority": 100})),
+        };
+        assert!(valid_request.validate().is_ok());
+
+        let invalid_request = BulkCandidateOperationRequest {
+            operation: "invalid_op".to_string(),
+            codebases: vec![],
+            parameters: None,
+        };
+        assert!(invalid_request.validate().is_err());
+    }
+}
