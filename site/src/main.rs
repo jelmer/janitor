@@ -1,10 +1,19 @@
 use anyhow::Result;
-use axum::{extract::State, http::StatusCode, response::Json, routing::get, Router};
+use axum::{
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::Next,
+    response::{Json, Response},
+    routing::{get, post},
+    Router,
+};
+use axum_extra::extract::CookieJar;
 use serde_json::{json, Value};
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::info;
+use tracing::{info, warn};
 
 mod analyze;
 mod api;
@@ -22,6 +31,12 @@ mod templates;
 mod webhook;
 
 use app::AppState;
+use auth::{
+    middleware::{auth_middleware_layer, AuthState},
+    oidc::OidcClient,
+    routes::{api_auth_routes, auth_routes},
+    session::SessionManager,
+};
 use config::Config;
 
 #[tokio::main]
@@ -50,7 +65,7 @@ async fn main() -> Result<()> {
 
     // Build the application router
     let listen_addr = app_state.config.site().listen_address;
-    let app = create_app(app_state);
+    let app = create_app(app_state).await?;
 
     // Start the server
     let listener = TcpListener::bind(&listen_addr).await?;
@@ -61,8 +76,16 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn create_app(state: AppState) -> Router {
-    Router::new()
+async fn create_app(state: AppState) -> Result<Router> {
+    // Set up authentication state
+    let auth_state = setup_auth(&state).await?;
+    let auth_state_arc = Arc::new(auth_state);
+    
+    // Add auth state to app state
+    let state_with_auth = state.with_auth_state(auth_state_arc.clone());
+
+    // Create main app routes with AppState (including auth)
+    let app_routes = Router::new()
         // Health check endpoint
         .route("/health", get(health_check))
         // API routes
@@ -70,14 +93,74 @@ fn create_app(state: AppState) -> Router {
         // Main site routes
         .nest("/", site_routes())
         // Static assets
-        .nest("/static", static_routes())
-        // Add middleware
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(CorsLayer::permissive()),
+        .nest("/static", static_routes());
+
+    // Create auth routes with wrapper handlers that extract auth state from app state
+    let auth_router = Router::new()
+        .route("/login", get(login_handler_wrapper))
+        .route("/auth/callback", get(callback_handler_wrapper))
+        .route("/logout", post(logout_handler_wrapper))
+        .route("/status", get(status_handler_wrapper))
+        .route("/protected", get(protected_handler_wrapper))
+        .route("/admin", get(admin_handler_wrapper))
+        .route("/qa", get(qa_handler_wrapper))
+        .route("/api/auth/status", get(status_handler_wrapper))
+        .route(
+            "/api/auth/user-info",
+            get(protected_handler_wrapper).route_layer(axum::middleware::from_fn(auth::middleware::require_login)),
         )
-        .with_state(state)
+        .route(
+            "/api/auth/admin-info",
+            get(admin_handler_wrapper).route_layer(axum::middleware::from_fn(auth::middleware::require_admin)),
+        );
+
+    // Create the application router with middleware and state
+    Ok(Router::new()
+        .merge(app_routes)
+        .merge(auth_router)
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn_with_state(
+            state_with_auth.clone(),
+            |State(app_state): State<AppState>, jar: CookieJar, req: Request, next: Next| async move {
+                let auth_state = app_state.auth_state.clone().expect("Auth state not initialized");
+                auth::middleware::session_middleware(State(auth_state), jar, req, next).await
+            },
+        ))
+        .with_state(state_with_auth))
+}
+
+/// Set up authentication state with OIDC client if configured
+async fn setup_auth(app_state: &AppState) -> Result<AuthState> {
+    let config = app_state.config.site();
+    
+    // Initialize session manager
+    let session_manager = SessionManager::new(app_state.database.pool().clone());
+    
+    // Ensure session tables exist
+    if let Err(e) = session_manager.ensure_table_exists().await {
+        warn!("Failed to create session tables: {}", e);
+    }
+    
+    // Create base auth state
+    let mut auth_state = AuthState::new(session_manager, config);
+    
+    // Try to initialize OIDC client if configured
+    if config.oidc_client_id.is_some() && config.oidc_client_secret.is_some() {
+        match OidcClient::new(config).await {
+            Ok(oidc_client) => {
+                info!("OIDC client initialized successfully");
+                auth_state.oidc_client = Some(Arc::new(oidc_client));
+            }
+            Err(e) => {
+                warn!("Failed to initialize OIDC client: {}. Authentication will be limited.", e);
+            }
+        }
+    } else {
+        info!("OIDC not configured - authentication will be limited");
+    }
+    
+    Ok(auth_state)
 }
 
 fn api_routes() -> Router<AppState> {
@@ -148,4 +231,60 @@ async fn api_status(State(state): State<AppState>) -> Json<Value> {
     }
 
     Json(status)
+}
+
+// Wrapper handlers that extract auth state from app state
+async fn login_handler_wrapper(
+    State(app_state): State<AppState>,
+    query: axum::extract::Query<auth::handlers::LoginQuery>,
+    user: auth::middleware::OptionalUser,
+    jar: CookieJar,
+) -> Result<Response, StatusCode> {
+    let auth_state = app_state.auth_state.clone().expect("Auth state not initialized");
+    auth::handlers::login_handler(State(auth_state), query, user, jar).await
+}
+
+async fn callback_handler_wrapper(
+    State(app_state): State<AppState>,
+    query: axum::extract::Query<auth::handlers::CallbackQuery>,
+    jar: CookieJar,
+) -> Result<Response, StatusCode> {
+    let auth_state = app_state.auth_state.clone().expect("Auth state not initialized");
+    auth::handlers::callback_handler(State(auth_state), query, jar).await
+}
+
+async fn logout_handler_wrapper(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Result<Response, StatusCode> {
+    let auth_state = app_state.auth_state.clone().expect("Auth state not initialized");
+    auth::handlers::logout_handler(State(auth_state), jar).await
+}
+
+async fn status_handler_wrapper(
+    State(_app_state): State<AppState>,
+    user: auth::middleware::OptionalUser,
+) -> Result<Json<auth::handlers::LoginStatus>, StatusCode> {
+    auth::handlers::status_handler(user).await
+}
+
+async fn protected_handler_wrapper(
+    State(_app_state): State<AppState>,
+    user: auth::middleware::UserContext,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    auth::handlers::protected_handler(user).await
+}
+
+async fn admin_handler_wrapper(
+    State(_app_state): State<AppState>,
+    user: auth::middleware::UserContext,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    auth::handlers::admin_handler(user).await
+}
+
+async fn qa_handler_wrapper(
+    State(_app_state): State<AppState>,
+    user: auth::middleware::UserContext,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    auth::handlers::qa_handler(user).await
 }

@@ -21,6 +21,7 @@ pub struct AppState {
     pub realtime: Arc<RealtimeManager>,
     pub assets: AssetManifest,
     pub start_time: Instant,
+    pub auth_state: Option<Arc<crate::auth::middleware::AuthState>>,
 }
 
 impl AppState {
@@ -87,7 +88,13 @@ impl AppState {
             realtime: realtime_manager,
             assets: asset_manifest,
             start_time: Instant::now(),
+            auth_state: None, // Will be set later during app creation
         })
+    }
+
+    pub fn with_auth_state(mut self, auth_state: Arc<crate::auth::middleware::AuthState>) -> Self {
+        self.auth_state = Some(auth_state);
+        self
     }
 
     pub async fn health_check(&self) -> Result<()> {
