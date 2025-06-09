@@ -204,23 +204,19 @@ pub async fn callback_handler(
 /// Logout handler - clear session and redirect
 pub async fn logout_handler(
     State(auth_state): State<Arc<AuthState>>,
-    OptionalUser(user): OptionalUser,
-    Form(form): Form<LogoutForm>,
     jar: CookieJar,
 ) -> Result<Response, StatusCode> {
-    let redirect_url = form.redirect.unwrap_or_else(|| "/".to_string());
+    let redirect_url = "/".to_string(); // Default redirect since we're not using form
 
-    // If user is authenticated, clear their session
-    if let Some(user_context) = user {
-        if let Some(session_cookie) = jar.get(&auth_state.cookie_config.name) {
-            let session_id = session_cookie.value();
+    // Check if there's a session to clear
+    if let Some(session_cookie) = jar.get(&auth_state.cookie_config.name) {
+        let session_id = session_cookie.value();
 
-            // Delete the session from storage
-            if let Err(e) = auth_state.session_manager.delete_session(session_id).await {
-                error!("Failed to delete session {}: {}", session_id, e);
-            } else {
-                info!("User {} logged out", user_context.user().email);
-            }
+        // Delete the session from storage
+        if let Err(e) = auth_state.session_manager.delete_session(session_id).await {
+            error!("Failed to delete session {}: {}", session_id, e);
+        } else {
+            info!("Session {} logged out", session_id);
         }
     }
 

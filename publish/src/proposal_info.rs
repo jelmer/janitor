@@ -400,15 +400,18 @@ impl ProposalInfoManager {
     }
 
     /// Clean up old closed proposals.
+    /// Now uses tombstone approach - marks very old proposals as archived instead of deleting.
     ///
     /// # Arguments
-    /// * `days_old` - Remove proposals closed more than this many days ago
+    /// * `days_old` - Archive proposals closed more than this many days ago
     ///
     /// # Returns
-    /// Number of proposals removed
+    /// Number of proposals archived
     pub async fn cleanup_old_proposals(&self, days_old: i32) -> Result<u64, sqlx::Error> {
+        // Use tombstone approach - mark as archived instead of deleting
+        // Only archive proposals that are already closed/merged and very old
         let result = sqlx::query(
-            "DELETE FROM merge_proposal WHERE status IN ('closed', 'merged') AND last_scanned < NOW() - INTERVAL '$1 days'"
+            "UPDATE merge_proposal SET status = 'archived' WHERE status IN ('closed', 'merged') AND last_scanned < NOW() - INTERVAL '$1 days' AND status != 'archived'"
         )
         .bind(days_old)
         .execute(&self.conn)
