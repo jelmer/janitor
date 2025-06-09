@@ -11,7 +11,8 @@
       "Bash(cargo build:*)",
       "Bash(cargo check:*)",
       "Bash(find:*)",
-      "Bash(cargo fmt:*)"
+      "Bash(cargo fmt:*)",
+      "Bash(timeout 300s cargo test --package janitor --lib shared_config::logging)"
     ],
     "deny": []
   }

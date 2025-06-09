@@ -225,9 +225,8 @@ impl LoggingConfig {
 
 /// Initialize logging based on configuration
 ///
-/// This is a simplified version that initializes basic tracing.
-/// For more advanced logging features, services can implement their own
-/// initialization using this config as a base.
+/// This initializes tracing with console and/or file output based on configuration.
+/// Supports log rotation, compression, and multiple output formats.
 pub fn init_logging(config: &LoggingConfig) -> Result<(), LoggingError> {
     use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -246,40 +245,317 @@ pub fn init_logging(config: &LoggingConfig) -> Result<(), LoggingError> {
         EnvFilter::new(&config.level)
     };
 
-    // Initialize basic console logging
-    if config.console_output {
-        if config.json_format {
-            tracing_subscriber::registry()
-                .with(env_filter)
-                .with(
-                    fmt::layer()
-                        .json()
-                        .with_current_span(false)
-                        .with_span_list(true),
-                )
-                .init();
-        } else {
-            let fmt_layer = fmt::layer()
-                .with_ansi(config.colored_output)
-                .with_target(config.include_module_path)
-                .with_line_number(config.include_line_numbers);
-
-            tracing_subscriber::registry()
-                .with(env_filter)
-                .with(fmt_layer)
-                .init();
+    // Build layers based on configuration
+    match (config.console_output, &config.file_output) {
+        (true, Some(file_config)) => {
+            // Both console and file output
+            init_with_both_outputs(config, file_config, env_filter)?;
         }
+        (true, None) => {
+            // Console output only
+            init_console_only(config, env_filter);
+        }
+        (false, Some(file_config)) => {
+            // File output only
+            init_file_only(config, file_config, env_filter)?;
+        }
+        (false, None) => {
+            // Neither console nor file output (should not happen due to validation)
+            tracing_subscriber::registry().with(env_filter).init();
+        }
+    }
+
+    Ok(())
+}
+
+/// Initialize with both console and file output
+fn init_with_both_outputs(
+    config: &LoggingConfig,
+    file_config: &FileOutputConfig,
+    env_filter: tracing_subscriber::EnvFilter,
+) -> Result<(), LoggingError> {
+    use tracing_subscriber::{fmt, prelude::*};
+
+    // Create file appender
+    let file_appender = create_file_appender(file_config)?;
+    
+    // Handle compression and file limits
+    start_log_management_task(file_config)?;
+
+    if config.json_format {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .json()
+                    .with_current_span(false)
+                    .with_span_list(true),
+            )
+            .with(
+                fmt::layer()
+                    .json()
+                    .with_current_span(false)
+                    .with_span_list(true)
+                    .with_writer(file_appender)
+                    .with_ansi(false),
+            )
+            .init();
     } else {
-        // Even if console output is disabled, we need some form of subscriber
-        tracing_subscriber::registry().with(env_filter).init();
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .with_ansi(config.colored_output)
+                    .with_target(config.include_module_path)
+                    .with_line_number(config.include_line_numbers),
+            )
+            .with(
+                fmt::layer()
+                    .with_target(config.include_module_path)
+                    .with_line_number(config.include_line_numbers)
+                    .with_writer(file_appender)
+                    .with_ansi(false),
+            )
+            .init();
     }
 
-    // TODO: File output support can be added in future iterations
-    // For now, services can implement file logging separately if needed
-    if config.file_output.is_some() {
-        log::warn!("File output is configured but not yet implemented in shared logging. Services should implement file logging separately.");
+    Ok(())
+}
+
+/// Initialize console output only
+fn init_console_only(config: &LoggingConfig, env_filter: tracing_subscriber::EnvFilter) {
+    use tracing_subscriber::{fmt, prelude::*};
+
+    if config.json_format {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .json()
+                    .with_current_span(false)
+                    .with_span_list(true),
+            )
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .with_ansi(config.colored_output)
+                    .with_target(config.include_module_path)
+                    .with_line_number(config.include_line_numbers),
+            )
+            .init();
+    }
+}
+
+/// Initialize file output only
+fn init_file_only(
+    config: &LoggingConfig,
+    file_config: &FileOutputConfig,
+    env_filter: tracing_subscriber::EnvFilter,
+) -> Result<(), LoggingError> {
+    use tracing_subscriber::{fmt, prelude::*};
+
+    // Create file appender
+    let file_appender = create_file_appender(file_config)?;
+    
+    // Handle compression and file limits
+    start_log_management_task(file_config)?;
+
+    if config.json_format {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .json()
+                    .with_current_span(false)
+                    .with_span_list(true)
+                    .with_writer(file_appender)
+                    .with_ansi(false),
+            )
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(
+                fmt::layer()
+                    .with_target(config.include_module_path)
+                    .with_line_number(config.include_line_numbers)
+                    .with_writer(file_appender)
+                    .with_ansi(false),
+            )
+            .init();
     }
 
+    Ok(())
+}
+
+/// Create a file appender for logging
+fn create_file_appender(
+    file_config: &FileOutputConfig,
+) -> Result<tracing_appender::rolling::RollingFileAppender, LoggingError> {
+    use tracing_appender::rolling::{RollingFileAppender, Rotation};
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = file_config.path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(|e| LoggingError::IoError {
+                path: parent.display().to_string(),
+                message: format!("Failed to create log directory: {}", e),
+            })?;
+        }
+    }
+
+    // Determine log file name and directory
+    let (log_dir, log_file_prefix) = if let Some(parent) = file_config.path.parent() {
+        let file_name = file_config
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("app");
+        (parent, file_name)
+    } else {
+        (std::path::Path::new("."), "app")
+    };
+
+    // Configure rotation based on max_size_bytes
+    let rotation = if file_config.max_size_bytes.is_some() {
+        // Use daily rotation when size limits are set
+        // (tracing-appender doesn't support size-based rotation directly)
+        Rotation::DAILY
+    } else {
+        Rotation::NEVER
+    };
+
+    // Create the rolling file appender
+    Ok(RollingFileAppender::new(rotation, log_dir, log_file_prefix))
+}
+
+/// Start background task for log file management
+fn start_log_management_task(file_config: &FileOutputConfig) -> Result<(), LoggingError> {
+    if file_config.compress || file_config.max_files.is_some() {
+        let file_config_clone = file_config.clone();
+        let log_dir_clone = file_config.path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_path_buf();
+        
+        tokio::spawn(async move {
+            if let Err(e) = manage_log_files(&log_dir_clone, &file_config_clone).await {
+                log::warn!("Error managing log files: {}", e);
+            }
+        });
+    }
+    Ok(())
+}
+
+/// Background task to manage log file compression and cleanup
+async fn manage_log_files(
+    log_dir: &std::path::Path,
+    file_config: &FileOutputConfig,
+) -> Result<(), std::io::Error> {
+    use std::time::Duration;
+
+    // Run cleanup every hour
+    let mut interval = tokio::time::interval(Duration::from_secs(3600));
+    
+    loop {
+        interval.tick().await;
+        
+        if let Err(e) = cleanup_log_files(log_dir, file_config).await {
+            log::warn!("Failed to cleanup log files: {}", e);
+        }
+    }
+}
+
+/// Clean up old log files based on configuration
+async fn cleanup_log_files(
+    log_dir: &std::path::Path,
+    file_config: &FileOutputConfig,
+) -> Result<(), std::io::Error> {
+    use std::fs;
+    use std::time::SystemTime;
+
+    let mut log_files = Vec::new();
+    
+    // Find all log files in the directory
+    for entry in fs::read_dir(log_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                // Check if this looks like a log file
+                if file_name.contains(".log") || file_name.ends_with(".log") {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            log_files.push((path, modified));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort by modification time (oldest first)
+    log_files.sort_by_key(|(_, modified)| *modified);
+    
+    // Compress old files if enabled
+    if file_config.compress {
+        for (path, modified) in &log_files {
+            let age = SystemTime::now().duration_since(*modified).unwrap_or_default();
+            
+            // Compress files older than 1 day that aren't already compressed
+            if age.as_secs() > 86400 && !path.extension().map_or(false, |ext| ext == "gz") {
+                if let Err(e) = compress_log_file(path).await {
+                    log::warn!("Failed to compress log file {}: {}", path.display(), e);
+                }
+            }
+        }
+    }
+    
+    // Remove old files if max_files is set
+    if let Some(max_files) = file_config.max_files {
+        if log_files.len() > max_files as usize {
+            let files_to_remove = log_files.len() - max_files as usize;
+            
+            for (path, _) in log_files.iter().take(files_to_remove) {
+                if let Err(e) = fs::remove_file(path) {
+                    log::warn!("Failed to remove old log file {}: {}", path.display(), e);
+                } else {
+                    log::info!("Removed old log file: {}", path.display());
+                }
+            }
+        }
+    }
+    
+    Ok(())
+}
+
+/// Compress a log file using gzip
+async fn compress_log_file(path: &std::path::Path) -> Result<(), std::io::Error> {
+    use std::fs::File;
+    use std::io::{Read, Write};
+    
+    let mut file = File::open(path)?;
+    let mut content = Vec::new();
+    file.read_to_end(&mut content)?;
+    
+    let compressed_path = path.with_extension(format!(
+        "{}.gz", 
+        path.extension().unwrap_or_default().to_string_lossy()
+    ));
+    
+    let compressed_file = File::create(&compressed_path)?;
+    let mut encoder = flate2::write::GzEncoder::new(compressed_file, flate2::Compression::default());
+    encoder.write_all(&content)?;
+    encoder.finish()?;
+    
+    // Remove original file after successful compression
+    std::fs::remove_file(path)?;
+    
+    log::info!("Compressed log file: {} -> {}", path.display(), compressed_path.display());
     Ok(())
 }
 
@@ -375,5 +651,65 @@ mod tests {
         };
 
         assert!(invalid_config.tracing_level().is_err());
+    }
+
+    #[test]
+    fn test_file_output_config() {
+        use std::path::PathBuf;
+
+        let file_config = FileOutputConfig {
+            path: PathBuf::from("/tmp/test.log"),
+            max_size_bytes: Some(1024 * 1024), // 1MB
+            max_files: Some(5),
+            compress: true,
+        };
+
+        let config = LoggingConfig {
+            console_output: false,
+            file_output: Some(file_config),
+            ..LoggingConfig::default()
+        };
+
+        assert!(config.validate().is_ok());
+        assert!(config.file_output.is_some());
+        assert_eq!(config.file_output.as_ref().unwrap().max_files, Some(5));
+        assert!(config.file_output.as_ref().unwrap().compress);
+    }
+
+    #[test]
+    fn test_file_output_validation() {
+        use std::path::PathBuf;
+
+        // Test invalid max_size_bytes
+        let file_config = FileOutputConfig {
+            path: PathBuf::from("/tmp/test.log"),
+            max_size_bytes: Some(0), // Invalid: should be > 0
+            max_files: Some(5),
+            compress: false,
+        };
+
+        let config = LoggingConfig {
+            console_output: false,
+            file_output: Some(file_config),
+            ..LoggingConfig::default()
+        };
+
+        assert!(config.validate().is_err());
+
+        // Test invalid max_files
+        let file_config = FileOutputConfig {
+            path: PathBuf::from("/tmp/test.log"),
+            max_size_bytes: Some(1024),
+            max_files: Some(0), // Invalid: should be > 0
+            compress: false,
+        };
+
+        let config = LoggingConfig {
+            console_output: false,
+            file_output: Some(file_config),
+            ..LoggingConfig::default()
+        };
+
+        assert!(config.validate().is_err());
     }
 }
