@@ -68,7 +68,7 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 - [ ] **Edge case handling** in publish_one.rs (noted but not fully implemented)
 
 ### Site Service - Authentication (site/src/auth/)
-- [ ] **Complete OIDC integration** - Multiple placeholder implementations
+- [x] **Complete OIDC integration** ✅ **COMPLETED**
 
 ---
 
@@ -80,9 +80,9 @@ The Janitor platform migration from Python to Rust is **99%+ complete**:
 
 ### Database Operations (site/src/database.rs)
 - [x] **Fix SQLx compilation errors and query syntax** ✅ **COMPLETED**
-- [ ] **Implement proper dynamic query building** for search_packages_advanced() (Line 1032)
-- [ ] **Implement proper filtering** in get_queue_items_with_stats() (Lines 1104-1106)
-- [ ] **Add campaign descriptions** in get_campaign_status_list() (Line 1742)
+- [x] **Implement proper dynamic query building** ✅ **COMPLETED** (Already well-implemented in search_packages_advanced)
+- [x] **Implement proper filtering** in get_queue_items_with_stats() ✅ **COMPLETED**
+- [x] **Add campaign descriptions** ✅ **COMPLETED** (Already implemented in get_campaign_description)
 
 ---
 

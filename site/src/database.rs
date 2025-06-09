@@ -1453,42 +1453,137 @@ impl DatabaseManager {
     /// Now properly implements filtering with dynamic WHERE conditions
     pub async fn get_queue_items_with_stats(
         &self,
-        _suite: Option<&str>,
-        _status: Option<&str>,
-        _priority: Option<&str>,
+        suite: Option<&str>,
+        status: Option<&str>,
+        priority: Option<&str>,
         limit: Option<i64>,
         offset: Option<i64>,
     ) -> Result<(Vec<serde_json::Value>, serde_json::Value), DatabaseError> {
         let limit = limit.unwrap_or(50);
         let offset = offset.unwrap_or(0);
         
-        // Use a simple query for now - filtering can be implemented later
-        let rows = sqlx::query(
-            r#"SELECT 
-                q.id,
-                q.codebase,
-                q.suite,
-                q.command,
-                q.context,
-                q.value as priority_value,
-                q.success_chance,
-                q.publish_policy,
-                q.status,
-                q.created_time,
-                q.assigned_time,
-                q.worker,
-                c.url as vcs_url,
-                c.branch,
-                c.vcs_type
-            FROM queue q
-            LEFT JOIN codebase c ON q.codebase = c.name
-            ORDER BY q.value DESC, q.created_time ASC
-            LIMIT $1 OFFSET $2"#
-        )
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
+        // Use pattern matching for different filter combinations
+        let rows = match (suite, status, priority) {
+            // All filters present
+            (Some(suite_filter), Some(status_filter), Some(priority_filter)) => {
+                let priority_range = match priority_filter {
+                    "high" => (80i32, i32::MAX),
+                    "medium" => (20i32, 79i32),
+                    "low" => (i32::MIN, 19i32),
+                    _ => {
+                        if let Ok(value) = priority_filter.parse::<i32>() {
+                            (value, value)
+                        } else {
+                            (i32::MIN, i32::MAX) // No priority filter
+                        }
+                    }
+                };
+                
+                sqlx::query(
+                    r#"SELECT 
+                        q.id, q.codebase, q.suite, q.command, q.context,
+                        q.value as priority_value, q.success_chance, q.publish_policy,
+                        q.status, q.created_time, q.assigned_time, q.worker,
+                        c.url as vcs_url, c.branch, c.vcs_type
+                    FROM queue q
+                    LEFT JOIN codebase c ON q.codebase = c.name
+                    WHERE q.suite = $1 AND q.status = $2 AND q.value BETWEEN $3 AND $4
+                    ORDER BY q.value DESC, q.created_time ASC
+                    LIMIT $5 OFFSET $6"#
+                )
+                .bind(suite_filter)
+                .bind(status_filter)
+                .bind(priority_range.0)
+                .bind(priority_range.1)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            
+            // Suite and status filters
+            (Some(suite_filter), Some(status_filter), None) => {
+                sqlx::query(
+                    r#"SELECT 
+                        q.id, q.codebase, q.suite, q.command, q.context,
+                        q.value as priority_value, q.success_chance, q.publish_policy,
+                        q.status, q.created_time, q.assigned_time, q.worker,
+                        c.url as vcs_url, c.branch, c.vcs_type
+                    FROM queue q
+                    LEFT JOIN codebase c ON q.codebase = c.name
+                    WHERE q.suite = $1 AND q.status = $2
+                    ORDER BY q.value DESC, q.created_time ASC
+                    LIMIT $3 OFFSET $4"#
+                )
+                .bind(suite_filter)
+                .bind(status_filter)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            
+            // Suite filter only
+            (Some(suite_filter), None, None) => {
+                sqlx::query(
+                    r#"SELECT 
+                        q.id, q.codebase, q.suite, q.command, q.context,
+                        q.value as priority_value, q.success_chance, q.publish_policy,
+                        q.status, q.created_time, q.assigned_time, q.worker,
+                        c.url as vcs_url, c.branch, c.vcs_type
+                    FROM queue q
+                    LEFT JOIN codebase c ON q.codebase = c.name
+                    WHERE q.suite = $1
+                    ORDER BY q.value DESC, q.created_time ASC
+                    LIMIT $2 OFFSET $3"#
+                )
+                .bind(suite_filter)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            
+            // Status filter only
+            (None, Some(status_filter), None) => {
+                sqlx::query(
+                    r#"SELECT 
+                        q.id, q.codebase, q.suite, q.command, q.context,
+                        q.value as priority_value, q.success_chance, q.publish_policy,
+                        q.status, q.created_time, q.assigned_time, q.worker,
+                        c.url as vcs_url, c.branch, c.vcs_type
+                    FROM queue q
+                    LEFT JOIN codebase c ON q.codebase = c.name
+                    WHERE q.status = $1
+                    ORDER BY q.value DESC, q.created_time ASC
+                    LIMIT $2 OFFSET $3"#
+                )
+                .bind(status_filter)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+            
+            // No filters (default case)
+            _ => {
+                sqlx::query(
+                    r#"SELECT 
+                        q.id, q.codebase, q.suite, q.command, q.context,
+                        q.value as priority_value, q.success_chance, q.publish_policy,
+                        q.status, q.created_time, q.assigned_time, q.worker,
+                        c.url as vcs_url, c.branch, c.vcs_type
+                    FROM queue q
+                    LEFT JOIN codebase c ON q.codebase = c.name
+                    ORDER BY q.value DESC, q.created_time ASC
+                    LIMIT $1 OFFSET $2"#
+                )
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+            }
+        };
 
         let mut items = Vec::new();
         for row in rows {
