@@ -2021,8 +2021,17 @@ async fn assign_work_internal(state: Arc<AppState>, request: AssignRequest) -> i
                 }
             };
 
+            // Extract environment variables from command
+            let (extra_env, _clean_command) = janitor::utils::splitout_env(&assignment.queue_item.command);
+            
             // Add environment setup with proper committer
-            let env = crate::committer_env(committer.as_deref());
+            let mut env = crate::committer_env(committer.as_deref());
+            
+            // Add extracted environment variables from command
+            for (key, value) in extra_env {
+                env.insert(key, value);
+            }
+            
             for (key, value) in env {
                 config.insert(format!("env_{}", key), value);
             }

@@ -16,6 +16,7 @@ pub mod security;
 pub mod shared_config;
 pub mod state;
 pub mod test_utils;
+pub mod utils;
 pub mod vcs;
 
 /// The type of a run ID.
