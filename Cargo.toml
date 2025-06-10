@@ -43,6 +43,9 @@ debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
 debian-control = "0.1.28"
 shlex.workspace = true
+base64.workspace = true
+thiserror.workspace = true
+axum.workspace = true
 prometheus = { version = "0.14.0", features = ["reqwest", "push"] }
 buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
@@ -86,6 +89,7 @@ silver-platter = { version = ">=0.5.47" }
 ognibuild  = "0.0.34"
 pyo3-async-runtimes = "0.22"
 shlex = "1"
+base64 = "0.22"
 buildlog-consultant = "0.1.1"
 deb822-lossless = "0.2.4"
 debian-control = "0.1.40"

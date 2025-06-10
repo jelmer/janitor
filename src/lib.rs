@@ -18,6 +18,7 @@ pub mod state;
 pub mod test_utils;
 pub mod utils;
 pub mod vcs;
+pub mod worker_auth;
 
 /// The type of a run ID.
 pub type RunId = String;
