@@ -1,58 +1,138 @@
-# Logs location; can be:
-#  + a local file path
+# For more options see: ./py/janitor/config.proto
+# For more examples see: https://salsa.debian.org/janitor-team/janitor.debian.net/-/blob/master/k8s/janitor.conf
+
+# Logs storage location; can be:
+#  + a local path
 #  + a GCS location (gs://BUCKET-NAME/)
 #  + a S3 location (https://...)
 logs_location: "https://s3.nl-ams.scw.cloud"
 
-# Artifact location: used to store build results. Can be:
-#  + a local file path
+# Artifact location: used to store build results; can be:
+#  + a local path
 #  + a GCS location (gs://BUCKET-NAME/)
 artifact_location: "/home/janitor/artifacts"
 
-# Database location: must be a valid postgresql URL
-database_location: "postgresql://janitor@example.com:5432/janitor"
+# Bazaar VCS (bzr-store) storage location; can be:
+#  + a local file path (file://...)
+#  + a remote location (https://...)
+bzr_location: "file:///home/janitor/vcs/bzr-store"
 
-# Redis
-redis_location: "redis://localhost"
+# Git VCS (git-store) storage location; can be:
+#  + a local file path (file://...)
+#  + a remote location (https://...)
+git_location: "file:///home/janitor/vcs/git-store"
 
-# Set the default committer; if unset defaults to current users' preferences
-# (i.e. ~/.gitconfig)
+# Database location; must be a valid PostgreSQL URL
+database_location: "postgresql://janitor:password@example.com:5432/janitor"
+
+# Redis location; must be a valid Redis URL
+redis_location: "redis://default:password@localhost"
+
+# Zipkin server location
+# If unset defaults to a local aiohttp server
+#zipkin_address: "https://debug.server.net:9411/api/v2/spans"
+
+# Default committer to use when committing changes
+# If unset, defaults to current users' preferences (i.e. ~/.gitconfig)
 committer: "Janitor Bot <janitor@jelmer.uk>"
 
-# Origin set in published archives
+# Origin in published archives
 origin: "janitor.debian.net"
 
+# User-agent string for web requests
+user_agent: "Janitor Bot"
+
+# Default bugtracker to file bug tickets
 bugtracker {
+  # Bug tracker platforms; can be:
+  #  + gitlab
+  #  + debian (Debian BTS - https://www.debian.org/Bugs/)
+  #  + github
   kind: gitlab
+
+  # URL to the project in the bugtracker
   url: "https://salsa.debian.org/jelmer/some-project"
+
   name: "some project"
 }
 
+# Debian distribution
 distribution {
   name: "unstable"
+
   archive_mirror_uri: "http://deb.debian.org/debian"
+
+  #signed_by: ""
+
   component: "main"
+
+  # Chroot name to use in sbuild
   chroot: "unstable-amd64-sbuild"
+
+  # Chroot alias to use with sbuild (./create-sbuild-chroot-schroot.py)
+  #chroot_alias: "unstable"
+
   lintian_profile: "debian"
+
   lintian_suppress_tag: "bad-distribution-in-changes-file"
   lintian_suppress_tag: "no-nmu-in-changelog"
   lintian_suppress_tag: "source-nmu-has-incorrect-version-number"
   lintian_suppress_tag: "changelog-distribution-does-not-match-changes-file"
   lintian_suppress_tag: "distribution-and-changes-mismatch"
+
   build_command: "sbuild -Asv"
+
   vendor: "debian"
+
+  # Set extra-repository when using mmdebstrap (./create-sbuild-chroot-*.py)
+  #extra: ""
 }
 
+# Janitor campaigns
 campaign {
+  # Name of the campaign
   name: "lintian-fixes"
+
+  # Default command, can be overridden on a per-package basis
   command: "lintian-brush"
+
+  # VCS branch name to use
   branch_name: "lintian-fixes"
+
+  #merge_proposal {
+  #  value_threshold: 1
+  #  commit_message: ""
+  #  title: ""
+  #  label: ""
+  #}
+
+  # Force building even if the command did not make any changes
+  force_build: false
+
+  skip_setup_validation: false
+
+  default_empty: false
+
+  # Either: debian_build or generic_build
   debian_build {
+    # Extra distributions to pull in packages from when building
+    #extra_build_distribution: ""
+
+    # Distribution to target when building
     build_distribution: "lintian-fixes"
+
+    # Suffix to add to version in changelog on build
     build_suffix: "jan+lint"
+
     base_distribution: "unstable"
+
+    # Optional chroot, if different from that of base_distribution
+    #chroot: ""
+
     build_command: "sbuild -Asv"
   }
+
+  # Override default bug tracker
   bugtracker {
     kind: debian
     url: "https://bugs.debian.org/lintian-brush"
@@ -130,19 +210,32 @@ campaign {
   }
 }
 
+# OAuth authorization, OpenID authentication
 oauth2_provider {
   client_id: "some-client-id"
   client_secret: "totally-secret"
+
+  # Used for finding e.g. token and authorize URLs
   base_url: "https://gitlab.com"
+
+  # Name of the OpenID group for QA reviewers
   qa_reviewer_group: "janitor-team/qa-reviewers"
+
+  # Name of the OpenID group for admins
   admin_group: "janitor-team/admins"
 }
 
-# Note that you'll need to run janitor.debian.archive to publish apt archives0
+# Provide apt archives
 apt_repository {
   name: "lintian-fixes"
+
+  # Human-readable description of the archive used in
+  # e.g. apt Release file
+
   description: "Builds of lintian fixes"
+
   base: "unstable"
+
   select {
     campaign: "lintian-fixes"
   }
