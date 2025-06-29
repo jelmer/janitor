@@ -31,7 +31,7 @@ askama_axum = { version = "0.4.0", features = ["serde-json", "serde-yaml", "huma
 nix = { version = "0.29.0", features = ["fs"] }
 percent-encoding = "2.3.1"
 maplit = "1.0.2"
-tempfile = "3.19.0"
+tempfile = "3.20.0"
 prometheus = "0.14.0"
 askama = "0.12.1"
 gethostname = "1.0.2"
@@ -49,7 +49,7 @@ cli = ["dep:clap", "dep:pyo3", "dep:pyo3-log"]
 http-body-util = "0.1.3"
 hyper = "1.6.0"
 serial_test = "3.1.1"
-tempfile = "3.19.0"
+tempfile = "3.20.0"
 test-log = "0.2.17"
 tower = { version = "0.5.2", features = ["util"] }
 
