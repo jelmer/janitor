@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS codebase (
 
    -- vcs type, if known
    vcs_type vcs_type,
-   value int,
+   value int not null check (value > 0),
    inactive boolean not null default false,
    hostname text generated always as (substring(branch_url, '.*://(?:[^/@]*@)?([^/]*)'::text)) stored,
    unique(branch_url, subpath),
