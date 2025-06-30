@@ -166,7 +166,7 @@ dev = [
     "marshmallow",
     "mock",
     "python-subunit",
-    "ruff==0.12.0",
+    "ruff==0.12.1",
     "yamllint",
 ]
 
