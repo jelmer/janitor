@@ -756,7 +756,7 @@ dependencies = [
  "ctor",
  "debian-changelog",
  "debian-control",
- "debversion",
+ "debversion 0.3.1",
  "difflib",
  "dirty-tracker",
  "lazy-regex",
@@ -792,7 +792,7 @@ dependencies = [
  "chrono",
  "clap",
  "debian-control",
- "debversion",
+ "debversion 0.4.5",
  "env_logger 0.11.8",
  "fancy-regex",
  "inventory",
@@ -1305,7 +1305,7 @@ version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6f8df1ed3ad28bd8380c05e317dcff67cd84957a334ccd713bfa81f9631f5dc"
 dependencies = [
- "debversion",
+ "debversion 0.4.5",
  "lazy-regex",
  "log",
  "mailparse 0.15.0",
@@ -1328,7 +1328,7 @@ dependencies = [
  "debian-changelog",
  "debian-control",
  "debian-copyright",
- "debversion",
+ "debversion 0.3.1",
  "dep3",
  "difflib",
  "distro-info",
@@ -1360,7 +1360,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "98258e2066472d8d04bfe8a3fab2e7be77fe87b913dab2308a59f13061145814"
 dependencies = [
  "chrono",
- "debversion",
+ "debversion 0.4.5",
  "lazy-regex",
  "log",
  "rowan 0.15.16",
@@ -1376,7 +1376,7 @@ checksum = "f9e04c1b1377047a3ee5ef6914f48187fd363f6e9287c3e6d72539f0a8cc2573"
 dependencies = [
  "chrono",
  "deb822-lossless",
- "debversion",
+ "debversion 0.4.5",
  "pyo3",
  "regex",
  "rowan 0.16.1",
@@ -1390,7 +1390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e893a383c33c4e2689fd3c3121d6e82193211f65e7c483463c816f6b7c29857e"
 dependencies = [
  "deb822-lossless",
- "debversion",
+ "debversion 0.4.5",
  "regex",
 ]
 
@@ -1400,7 +1400,7 @@ version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f692668701f5382bea79960cad4798f97689de3e22af638ee43552887c180f4f"
 dependencies = [
- "debversion",
+ "debversion 0.4.5",
  "m_lexer",
  "rowan 0.16.1",
  "url",
@@ -1408,13 +1408,23 @@ dependencies = [
 
 [[package]]
 name = "debversion"
-version = "0.4.4"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b892997e53d52f9ac5c30bdac09cbea6bb1eeb3f93a204b8548774081a44b496"
+checksum = "07366429d82d50c6393c1e9c03645ea5e2f529d4bce483b4b5a54312b86e0f25"
+dependencies = [
+ "lazy-regex",
+ "pyo3",
+ "serde",
+]
+
+[[package]]
+name = "debversion"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fcc80ce2f93511a7ad477669cb8935d5d6eb247dd2ef75cf897cef8a00e9f72"
 dependencies = [
  "chrono",
  "lazy-regex",
- "pyo3",
  "serde",
  "sqlx",
 ]
@@ -1725,7 +1735,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "976dd42dc7e85965fe702eb8164f21f450704bdde31faefd6471dba214cb594e"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3114,7 +3124,7 @@ checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
 dependencies = [
  "hermit-abi 0.5.0",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3186,7 +3196,7 @@ dependencies = [
  "chrono",
  "clap",
  "debian-control",
- "debversion",
+ "debversion 0.4.5",
  "env_logger 0.11.8",
  "fancy-regex",
  "filetime",
@@ -3321,7 +3331,7 @@ dependencies = [
  "chrono",
  "clap",
  "debian-control",
- "debversion",
+ "debversion 0.4.5",
  "janitor",
  "log",
  "maplit",
@@ -3358,7 +3368,7 @@ dependencies = [
  "clap",
  "debian-analyzer",
  "debian-changelog",
- "debversion",
+ "debversion 0.4.5",
  "gethostname",
  "http-body-util",
  "hyper",
@@ -3397,7 +3407,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4083,7 +4093,7 @@ dependencies = [
  "debian-analyzer",
  "debian-changelog",
  "debian-control",
- "debversion",
+ "debversion 0.4.5",
  "dirs",
  "env_logger 0.11.8",
  "flate2",
@@ -5311,7 +5321,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5324,7 +5334,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5700,7 +5710,7 @@ dependencies = [
  "debian-analyzer",
  "debian-changelog",
  "debian-control",
- "debversion",
+ "debversion 0.3.1",
  "env_logger 0.11.8",
  "flate2",
  "lazy-regex",
@@ -6098,7 +6108,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6257,7 +6267,7 @@ dependencies = [
  "getrandom 0.3.2",
  "once_cell",
  "rustix 1.0.5",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -6900,7 +6910,7 @@ dependencies = [
  "debian-control",
  "debian-copyright",
  "debian-watch",
- "debversion",
+ "debversion 0.4.5",
  "distro-info",
  "futures",
  "gix-config",
@@ -7225,7 +7235,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
