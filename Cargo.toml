@@ -56,7 +56,7 @@ debian-analyzer = "0.158.25"
 debversion = { version = "0.4" }
 google-cloud-storage = "0.22.1"
 google-cloud-auth = "0.17.2"
-tempfile = "3.19.0"
+tempfile = "3.20.0"
 redis = "0.27.5"
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
