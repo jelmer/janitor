@@ -38,7 +38,7 @@ tempfile.workspace = true
 google-cloud-storage = { workspace = true, optional = true }
 google-cloud-auth = { workspace = true, optional = true }
 flate2 = "1.0.34"
-async-compression = { version = "0.4.6", features = ["tokio", "gzip"] }
+async-compression = { version = "0.4.27", features = ["tokio", "gzip"] }
 filetime = "0.2.25"
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
