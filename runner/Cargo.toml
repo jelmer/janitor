@@ -28,7 +28,7 @@ silver-platter = { workspace = true, features = ["debian"] }
 reqwest.workspace = true
 clap = { workspace = true, features = ["derive"], optional = true }
 axum.workspace = true
-serde_with = { version = "3.9.0", features = ["chrono_0_4"] }
+serde_with = { version = "3.14.0", features = ["chrono_0_4"] }
 
 [dev-dependencies]
 maplit = { workspace = true }
