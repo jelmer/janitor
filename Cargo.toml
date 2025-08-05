@@ -81,7 +81,7 @@ silver-platter = { version = ">=0.5.47" }
 ognibuild  = "0.0.34"
 pyo3-async-runtimes = "0.22"
 shlex = "1"
-buildlog-consultant = "0.1.1"
+buildlog-consultant = "0.1.2"
 deb822-lossless = "0.2.4"
 debian-control = "0.1.40"
 pyo3-filelike = "0.4.0"
