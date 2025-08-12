@@ -37,7 +37,7 @@ jobs:
     # Steps to perform in job
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Python style checks (Ruff)
         if: always()
@@ -67,7 +67,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install dependencies (apt)
         run: |
@@ -127,7 +127,7 @@ jobs:
     # Steps to perform in job
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install dependencies (apt)
         run: |
