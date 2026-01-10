@@ -62,7 +62,7 @@ sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
 pyo3 = { version = "0.27" }
-reqwest = { version = "0.12" }
+reqwest = { version = "0.13", features = ["blocking"] }
 pyo3-log = "0.13"
 breezyshim = "0.7.7"
 #breezyshim = { path = "../breezyshim/trunk" }
