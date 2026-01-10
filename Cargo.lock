@@ -3400,7 +3400,7 @@ dependencies = [
  "nix",
  "patchkit",
  "pyo3",
- "redis",
+ "redis 0.27.6",
  "serde",
  "serde_json",
  "shlex",
@@ -3444,7 +3444,7 @@ dependencies = [
  "minijinja",
  "prometheus",
  "pyo3",
- "redis",
+ "redis 0.27.6",
  "reqwest 0.12.28",
  "rslock",
  "serde",
@@ -3470,7 +3470,7 @@ dependencies = [
  "janitor",
  "log",
  "maplit",
- "redis",
+ "redis 0.27.6",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -5345,6 +5345,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "redis"
+version = "0.32.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "014cc767fefab6a3e798ca45112bccad9c6e0e218fbd49720042716c73cfef44"
+dependencies = [
+ "bytes",
+ "cfg-if",
+ "combine",
+ "futures-util",
+ "itoa",
+ "num-bigint",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls",
+ "rustls-native-certs",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.6.1",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5603,13 +5628,13 @@ dependencies = [
 
 [[package]]
 name = "rslock"
-version = "0.5.1"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea47427a397d878cc17423954434f77e646458d2b90bf19386a8772809dd12f"
+checksum = "635397ee92d550eaf35f92a4ffcd689330ba43f1c1c4308df58b6fddf337d1fe"
 dependencies = [
  "futures",
- "rand 0.8.5",
- "redis",
+ "rand 0.9.2",
+ "redis 0.32.7",
  "thiserror 2.0.17",
  "tokio",
 ]
