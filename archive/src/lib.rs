@@ -4,8 +4,6 @@
 
 #![deny(missing_docs)]
 
-use tracing::{debug, error, info};
-
 /// Temporary prefix used for archive operations.
 pub const TMP_PREFIX: &str = "janitor-apt";
 /// Default timeout for Google Cloud Storage operations in seconds.

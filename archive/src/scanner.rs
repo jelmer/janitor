@@ -1,11 +1,8 @@
 /// Module for scanning Debian package archives.
-use deb822_lossless::FromDeb822Paragraph;
+use deb822_fast::convert::FromDeb822Paragraph;
+use deb822_fast::Deb822;
 use debian_control::lossy::apt::{Package, Source};
-use futures::stream::StreamExt;
-use futures::stream::{self, Stream};
-use futures::TryStreamExt;
 use std::process::Stdio;
-use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
@@ -46,8 +43,7 @@ async fn scan_packages<'a>(td: &str, arch: Option<&str>) -> Result<Vec<Package>,
         .map_err(|e| e.to_string())?;
 
     // Stream stdout paragraphs
-    let paragraphs =
-        deb822_lossless::lossy::Deb822::from_reader(&stdout[..]).map_err(|e| e.to_string())?;
+    let paragraphs = Deb822::from_reader(&stdout[..]).map_err(|e| e.to_string())?;
 
     // Process stderr
     tokio::spawn(async move {
@@ -99,8 +95,7 @@ async fn scan_sources<'a>(td: &str) -> Result<Vec<Source>, String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    let paragraphs =
-        deb822_lossless::lossy::Deb822::from_reader(&stdout[..]).map_err(|e| e.to_string())?;
+    let paragraphs = Deb822::from_reader(&stdout[..]).map_err(|e| e.to_string())?;
 
     // Process stderr
     tokio::spawn(async move {
@@ -140,7 +135,6 @@ fn handle_log_line(line: &[u8]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test]
     async fn test_scan_packages() {

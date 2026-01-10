@@ -204,7 +204,7 @@ ORDER BY start_time DESC
             && run
                 .failure_details
                 .as_ref()
-                .map_or(false, |d| d.get("relations").is_some())
+                .is_some_and(|d| d.get("relations").is_some())
         {
             let relations: Relations = run.failure_details.as_ref().unwrap()["relations"]
                 .as_str()

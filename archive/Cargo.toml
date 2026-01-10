@@ -7,5 +7,5 @@ edition.workspace = true
 futures = "0.3.31"
 tokio = { workspace = true, features = ["full"] }
 tracing = "0.1.41"
-deb822-lossless.workspace = true
+deb822-fast = "0.2"
 debian-control.workspace = true

@@ -42,7 +42,7 @@ async-compression = { version = "0.4.6", features = ["tokio", "gzip"] }
 filetime = "0.2.25"
 debversion = { workspace = true, optional = true, features = ["sqlx"] }
 reqwest = { workspace = true, features = ["json"] }
-debian-control = "0.1.28"
+debian-control.workspace = true
 shlex.workspace = true
 prometheus = { version = "0.14.0", features = ["reqwest"] }
 buildlog-consultant = { workspace = true }
@@ -82,8 +82,8 @@ ognibuild = { version = "0.2", features = ["debian"] }
 pyo3-async-runtimes = "0.27"
 shlex = "1"
 buildlog-consultant = "0.1.1"
-deb822-lossless = "0.2.4"
-debian-control = "0.1.40"
+deb822-lossless = "0.5.6"
+debian-control = "0.2.15"
 pyo3-filelike = "0.5"
 
 [build-dependencies]

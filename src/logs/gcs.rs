@@ -257,7 +257,7 @@ impl LogFileManager for GCSLogFileManager {
                 if let Some(time_created) = object.time_created {
                     // Convert from time::OffsetDateTime to chrono::DateTime<Utc>
                     let timestamp = time_created.unix_timestamp();
-                    let nsecs = time_created.nanosecond() as u32;
+                    let nsecs = time_created.nanosecond();
                     if let Some(dt) = DateTime::<Utc>::from_timestamp(timestamp, nsecs) {
                         Ok(dt)
                     } else {
@@ -315,7 +315,7 @@ impl GCSLogFileManager {
                 }
 
                 logs.entry((codebase, log_id))
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(log_file);
             }
         }

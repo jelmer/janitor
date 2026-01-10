@@ -786,7 +786,7 @@ checksum = "14b6d8d7435dea08c52ddc1f4c3ab0547fc6240283753cdf905e5c0e95d44080"
 dependencies = [
  "chrono",
  "ctor",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "debian-changelog",
  "debian-control 0.2.15",
  "debversion",
@@ -1357,17 +1357,6 @@ checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
 name = "deb822-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b6e5cafe61e77421a090e2a33b8a2e4e2ff1b106fd906ebade111307064d981"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.114",
-]
-
-[[package]]
-name = "deb822-derive"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e83ef29a094bcb2b7dd0f609ace7f5a34ef9a62e0731ebd350637640320a3b15"
@@ -1383,19 +1372,7 @@ version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "114c474fa4cd5d6d24bb5e68b36fa4ef70f5b830e3cc14a9b66a12e71a15aeb9"
 dependencies = [
- "deb822-derive 0.3.1",
-]
-
-[[package]]
-name = "deb822-lossless"
-version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "812bb5c8052a89edc6d45d1bc3b3400e8186dd166e9b0a9520bfa5a2bd8477ee"
-dependencies = [
- "deb822-derive 0.2.0",
- "regex",
- "rowan",
- "serde",
+ "deb822-derive",
 ]
 
 [[package]]
@@ -1423,7 +1400,7 @@ dependencies = [
  "maplit",
  "reqwest 0.12.28",
  "tokio",
- "xmltree",
+ "xmltree 0.11.0",
 ]
 
 [[package]]
@@ -1435,7 +1412,7 @@ dependencies = [
  "breezyshim",
  "chrono",
  "configparser",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "debian-changelog",
  "debian-control 0.2.15",
  "debian-copyright",
@@ -1482,12 +1459,13 @@ dependencies = [
 
 [[package]]
 name = "debian-control"
-version = "0.1.41"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9e04c1b1377047a3ee5ef6914f48187fd363f6e9287c3e6d72539f0a8cc2573"
+checksum = "3351d6fb92a49b0d49aae155f438e25950e8f10eed7984f1e4742807848ccebf"
 dependencies = [
  "chrono",
- "deb822-lossless 0.2.4",
+ "deb822-fast",
+ "deb822-lossless",
  "debversion",
  "regex",
  "rowan",
@@ -1502,7 +1480,7 @@ checksum = "5134cb48cb45dd196a1825d09b74b90dfe2c708d442651e3df91abcb83c3f678"
 dependencies = [
  "chrono",
  "deb822-fast",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "debversion",
  "pyo3",
  "regex",
@@ -1517,7 +1495,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5eeb778309b1f76995b1cbcdc0fbc5f51927d6adb62b090e518467d9fb0a391"
 dependencies = [
  "deb822-fast",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "debversion",
  "regex",
 ]
@@ -1557,7 +1535,7 @@ checksum = "832c55a9cf6298eb1c6a82b827cabdedac7f9d0053f334739cfdab36637c5305"
 dependencies = [
  "chrono",
  "deb822-fast",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "url",
 ]
 
@@ -2848,6 +2826,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "html5ever"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6452c4751a24e1b99c3260d505eaeee76a050573e61f30ac2c924ddc7236f01e"
+dependencies = [
+ "log",
+ "markup5ever 0.36.1",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3332,7 +3320,7 @@ dependencies = [
  "buildlog-consultant",
  "chrono",
  "clap",
- "debian-control 0.1.41",
+ "debian-control 0.2.15",
  "debversion",
  "env_logger 0.11.8",
  "fancy-regex 0.14.0",
@@ -3369,8 +3357,8 @@ dependencies = [
 name = "janitor-archive"
 version = "0.1.0"
 dependencies = [
- "deb822-lossless 0.2.4",
- "debian-control 0.1.41",
+ "deb822-fast",
+ "debian-control 0.2.15",
  "futures",
  "tokio",
  "tracing",
@@ -3467,7 +3455,7 @@ dependencies = [
  "breezyshim",
  "chrono",
  "clap",
- "debian-control 0.1.41",
+ "debian-control 0.1.48",
  "debversion",
  "janitor",
  "log",
@@ -3689,7 +3677,7 @@ dependencies = [
  "petgraph",
  "regex",
  "regex-syntax 0.6.29",
- "string_cache",
+ "string_cache 0.8.9",
  "term",
  "tiny-keccak",
  "unicode-xid",
@@ -3939,8 +3927,8 @@ dependencies = [
  "log",
  "phf 0.10.1",
  "phf_codegen 0.10.0",
- "string_cache",
- "string_cache_codegen",
+ "string_cache 0.8.9",
+ "string_cache_codegen 0.5.4",
  "tendril",
 ]
 
@@ -3953,9 +3941,20 @@ dependencies = [
  "log",
  "phf 0.11.3",
  "phf_codegen 0.11.3",
- "string_cache",
- "string_cache_codegen",
+ "string_cache 0.8.9",
+ "string_cache_codegen 0.5.4",
  "tendril",
+]
+
+[[package]]
+name = "markup5ever"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c3294c4d74d0742910f8c7b466f44dda9eb2d5742c1e430138df290a1e8451c"
+dependencies = [
+ "log",
+ "tendril",
+ "web_atoms",
 ]
 
 [[package]]
@@ -4284,7 +4283,7 @@ dependencies = [
  "buildlog-consultant",
  "chrono",
  "clap",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "debian-analyzer",
  "debian-changelog",
  "debian-control 0.2.15",
@@ -4323,7 +4322,7 @@ dependencies = [
  "upstream-ontologist",
  "url",
  "whoami",
- "xmltree",
+ "xmltree 0.11.0",
 ]
 
 [[package]]
@@ -4600,6 +4599,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1562dc717473dbaa4c1f85a36410e03c047b2e7df7f45ee938fbef64ae7fadf"
+dependencies = [
+ "phf_shared 0.13.1",
+ "serde",
+]
+
+[[package]]
 name = "phf_codegen"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4617,6 +4626,16 @@ checksum = "aef8048c789fa5e851558d709946d6d79a8ff88c0440c587967f8e94bfb1216a"
 dependencies = [
  "phf_generator 0.11.3",
  "phf_shared 0.11.3",
+]
+
+[[package]]
+name = "phf_codegen"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49aa7f9d80421bca176ca8dbfebe668cc7a2684708594ec9f3c0db0805d5d6e1"
+dependencies = [
+ "phf_generator 0.13.1",
+ "phf_shared 0.13.1",
 ]
 
 [[package]]
@@ -4640,6 +4659,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf_generator"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "135ace3a761e564ec88c03a77317a7c6b80bb7f7135ef2544dbe054243b89737"
+dependencies = [
+ "fastrand 2.3.0",
+ "phf_shared 0.13.1",
+]
+
+[[package]]
 name = "phf_shared"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4653,6 +4682,15 @@ name = "phf_shared"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67eabc2ef2a60eb7faa00097bd1ffdb5bd28e62bf39990626a582201b7a754e5"
+dependencies = [
+ "siphasher 1.0.1",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher 1.0.1",
 ]
@@ -5195,9 +5233,9 @@ version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f97b1f65f8b0a2687d665c2d16e866f69c5c2f0486ccf905b776badacb3ebb53"
 dependencies = [
- "deb822-derive 0.3.1",
+ "deb822-derive",
  "deb822-fast",
- "deb822-lossless 0.5.6",
+ "deb822-lossless",
  "rowan",
  "serde",
  "url",
@@ -6552,6 +6590,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "string_cache"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a18596f8c785a729f2819c0f6a7eae6ebeebdfffbfe4214ae6b087f690e31901"
+dependencies = [
+ "new_debug_unreachable",
+ "parking_lot",
+ "phf_shared 0.13.1",
+ "precomputed-hash",
+]
+
+[[package]]
 name = "string_cache_codegen"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6559,6 +6609,18 @@ checksum = "c711928715f1fe0fe509c53b43e993a9a557babc2d0a3567d0a3006f1ac931a0"
 dependencies = [
  "phf_generator 0.11.3",
  "phf_shared 0.11.3",
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "string_cache_codegen"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "585635e46db231059f76c5849798146164652513eb9e8ab2685939dd90f29b69"
+dependencies = [
+ "phf_generator 0.13.1",
+ "phf_shared 0.13.1",
  "proc-macro2",
  "quote",
 ]
@@ -7291,7 +7353,7 @@ dependencies = [
  "distro-info",
  "futures",
  "gix-config",
- "html5ever 0.27.0",
+ "html5ever 0.36.1",
  "lazy-regex",
  "lazy_static",
  "log",
@@ -7323,7 +7385,7 @@ dependencies = [
  "tokio",
  "toml 0.9.11+spec-1.1.0",
  "url",
- "xmltree",
+ "xmltree 0.12.0",
 ]
 
 [[package]]
@@ -7414,7 +7476,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.114",
  "url",
- "xmltree",
+ "xmltree 0.12.0",
 ]
 
 [[package]]
@@ -7552,6 +7614,18 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "web_atoms"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30e588f10c7bc3465f5fc1ab087fc97877ec1064a7ec89fb685ac4ee998dac4a"
+dependencies = [
+ "phf 0.13.1",
+ "phf_codegen 0.13.1",
+ "string_cache 0.9.0",
+ "string_cache_codegen 0.6.1",
 ]
 
 [[package]]
@@ -8040,6 +8114,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fb433233f2df9344722454bc7e96465c9d03bff9d77c248f9e7523fe79585b5"
 
 [[package]]
+name = "xml"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2df5825faced2427b2da74d9100f1e2e93c533fff063506a81ede1cf517b2e7e"
+
+[[package]]
 name = "xml-rs"
 version = "0.8.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8074,6 +8154,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b619f8c85654798007fb10afa5125590b43b088c225a25fc2fec100a9fad0fc6"
 dependencies = [
  "xml-rs",
+]
+
+[[package]]
+name = "xmltree"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cbc04313cab124e498ab1724e739720807b6dc405b9ed0edc5860164d2e4ff70"
+dependencies = [
+ "xml",
 ]
 
 [[package]]
