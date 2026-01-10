@@ -259,11 +259,12 @@ fn import_branches_git(
     };
 
     let repo = vcs_result_controldir.open_repository().unwrap();
+    let source_repo = local_branch.repository();
 
     // Clone for the sake of the closure
     let log_id_ = log_id.to_string();
     let campaign_ = campaign.to_string();
-    let repo_ = local_branch.repository();
+    let source_repo_for_closure = source_repo.clone();
     let branches = branches.clone();
 
     let get_changed_refs = move |_refs: &HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)>| -> HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)> {
@@ -273,7 +274,7 @@ fn import_branches_git(
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
                 if let Some(r) = r {
-                    (repo_.lookup_bzr_revision_id(r).unwrap().0, Some(r.clone()))
+                    (source_repo_for_closure.lookup_bzr_revision_id(r).unwrap().0, Some(r.clone()))
                 } else {
                     (breezyshim::git::ZERO_SHA.to_vec(), r.clone())
                 },
@@ -289,7 +290,7 @@ fn import_branches_git(
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
                 (
-                    repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                    source_repo_for_closure.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
                     r.clone(),
                 ),
             );
@@ -298,7 +299,7 @@ fn import_branches_git(
                 changed_refs.insert(
                     tagname.as_bytes().to_vec(),
                     (
-                        repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                        source_repo_for_closure.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
                         r.clone(),
                     ),
                 );
@@ -307,7 +308,7 @@ fn import_branches_git(
         changed_refs
     };
 
-    let inter = breezyshim::interrepository::get(&local_branch.repository(), &repo).unwrap();
+    let inter = breezyshim::interrepository::get(&source_repo, &repo).unwrap();
     inter.fetch_refs(
         std::sync::Mutex::new(Box::new(get_changed_refs)),
         false,
