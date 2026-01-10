@@ -239,11 +239,7 @@ impl GCSLogFileManager {
         let mut logs: HashMap<(String, String), Vec<String>> = HashMap::new();
         let bucket = self.bucket_path();
 
-        let mut stream = self
-            .control
-            .list_objects()
-            .set_parent(bucket)
-            .by_item();
+        let mut stream = self.control.list_objects().set_parent(bucket).by_item();
 
         while let Some(result) = stream.next().await {
             let object = result.map_err(|e| Error::Other(e.to_string()))?;
@@ -261,9 +257,7 @@ impl GCSLogFileManager {
                     log_file = log_file[..log_file.len() - 3].to_string();
                 }
 
-                logs.entry((codebase, log_id))
-                    .or_default()
-                    .push(log_file);
+                logs.entry((codebase, log_id)).or_default().push(log_file);
             }
         }
 
