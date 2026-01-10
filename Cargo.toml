@@ -78,7 +78,7 @@ url = "2"
 chrono = "0.4"
 clap = { version = "4" }
 tokio = "1"
-axum = "0.8"
+axum = "0.8.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
 silver-platter = { version = "0.8.1" }
