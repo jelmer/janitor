@@ -57,7 +57,7 @@ debversion = { version = "0.5", features = ["serde", "sqlx"] }
 google-cloud-storage = "0.22.1"
 google-cloud-auth = "0.17.2"
 tempfile = "3.20.0"
-redis = "0.27.5"
+redis = "1.0.2"
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
