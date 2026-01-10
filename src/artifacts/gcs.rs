@@ -1,11 +1,6 @@
 use async_trait::async_trait;
-use google_cloud_auth::credentials::CredentialsFile;
-use google_cloud_storage::client::{Client, ClientConfig};
-use google_cloud_storage::http::objects::{
-    download::Range, get::GetObjectRequest, list::ListObjectsRequest, upload::Media,
-    upload::UploadObjectRequest, upload::UploadType,
-};
-use google_cloud_storage::http::Error as GcsError;
+use google_cloud_gax::paginator::ItemPaginator;
+use google_cloud_storage::client::{Storage, StorageControl};
 use std::collections::HashSet;
 use std::fs::File;
 use std::path::Path;
@@ -14,7 +9,8 @@ use crate::artifacts::{ArtifactManager, Error};
 
 pub struct GCSArtifactManager {
     bucket_name: String,
-    client: Client,
+    storage: Storage,
+    control: StorageControl,
 }
 
 impl std::fmt::Debug for GCSArtifactManager {
@@ -26,10 +22,7 @@ impl std::fmt::Debug for GCSArtifactManager {
 }
 
 impl GCSArtifactManager {
-    pub async fn from_url(
-        location: &url::Url,
-        creds: Option<CredentialsFile>,
-    ) -> Result<Self, Error> {
+    pub async fn from_url(location: &url::Url) -> Result<Self, Error> {
         if location.scheme() != "gs" {
             return Err(Error::Other(format!(
                 "Invalid URL scheme: {}",
@@ -40,26 +33,29 @@ impl GCSArtifactManager {
             .host_str()
             .ok_or_else(|| Error::Other("Missing bucket name".to_string()))?;
 
-        Self::new(bucket_name.to_string(), creds).await
+        Self::new(bucket_name.to_string()).await
     }
 
-    pub async fn new(bucket_name: String, creds: Option<CredentialsFile>) -> Result<Self, Error> {
-        let config = ClientConfig::default();
-        let config = if let Some(creds) = creds {
-            config
-                .with_credentials(creds)
-                .await
-                .map_err(|e| Error::Other(e.to_string()))?
-        } else {
-            config.anonymous()
-        };
+    pub async fn new(bucket_name: String) -> Result<Self, Error> {
+        let storage = Storage::builder()
+            .build()
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
 
-        let client = Client::new(config);
+        let control = StorageControl::builder()
+            .build()
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
 
         Ok(Self {
             bucket_name,
-            client,
+            storage,
+            control,
         })
+    }
+
+    fn bucket_path(&self) -> String {
+        format!("projects/_/buckets/{}", self.bucket_name)
     }
 }
 
@@ -89,31 +85,21 @@ impl ArtifactManager for GCSArtifactManager {
             .into_iter()
             .map(|name| {
                 let file_path = local_path.join(&name);
-                let bucket_name = self.bucket_name.clone();
-                let client = self.client.clone();
+                let bucket = self.bucket_path();
+                let storage = self.storage.clone();
                 let run_id = run_id.to_string();
                 let name = name.clone();
                 tokio::spawn(async move {
                     let file = tokio::fs::File::open(&file_path).await?;
-                    let request = UploadObjectRequest {
-                        bucket: bucket_name,
-                        ..Default::default()
-                    };
+                    let object_name = format!("{}/{}", run_id, name);
 
-                    let upload_type =
-                        UploadType::Simple(Media::new(format!("{}/{}", run_id, name)));
-
-                    client
-                        .upload_object(&request, file, &upload_type)
+                    storage
+                        .write_object(&bucket, &object_name, file)
+                        .send_unbuffered()
                         .await
-                        .map_err(|e| {
-                            if let GcsError::Response(ref e) = e {
-                                if e.code == 503 {
-                                    return Error::ServiceUnavailable;
-                                }
-                            }
-                            Error::Other(e.to_string())
-                        })
+                        .map_err(|e| Error::Other(e.to_string()))?;
+
+                    Ok::<(), Error>(())
                 })
             })
             .collect();
@@ -126,35 +112,26 @@ impl ArtifactManager for GCSArtifactManager {
     }
 
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error> {
+        let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
-        let request = ListObjectsRequest {
-            bucket: self.bucket_name.clone(),
-            prefix: Some(prefix.clone()),
-            ..Default::default()
-        };
 
-        let objects = match self.client.list_objects(&request).await {
-            Ok(response) => response.items.unwrap_or_default(),
-            Err(GcsError::Response(e)) if e.code == 503 => return Err(Error::ServiceUnavailable),
-            Err(GcsError::Response(e)) if e.code == 404 => return Err(Error::ArtifactsMissing),
-            Err(e) => return Err(Error::Other(e.to_string())),
-        };
+        let mut stream = self
+            .control
+            .list_objects()
+            .set_parent(bucket.clone())
+            .set_prefix(&prefix)
+            .by_item();
 
-        for object in objects {
-            let name = object.name;
-            let request = google_cloud_storage::http::objects::delete::DeleteObjectRequest {
-                bucket: self.bucket_name.clone(),
-                object: name,
-                ..Default::default()
-            };
+        while let Some(result) = stream.next().await {
+            let object = result.map_err(|e| Error::Other(e.to_string()))?;
 
-            match self.client.delete_object(&request).await {
-                Ok(_) => (),
-                Err(GcsError::Response(e)) if e.code == 503 => {
-                    return Err(Error::ServiceUnavailable)
-                }
-                Err(e) => return Err(Error::Other(e.to_string())),
-            }
+            self.control
+                .delete_object()
+                .set_bucket(bucket.clone())
+                .set_object(&object.name)
+                .send()
+                .await
+                .map_err(|e| Error::Other(e.to_string()))?;
         }
 
         Ok(())
@@ -165,23 +142,23 @@ impl ArtifactManager for GCSArtifactManager {
         run_id: &str,
         filename: &str,
     ) -> Result<Box<dyn std::io::Read + Send + Sync>, Error> {
+        let bucket = self.bucket_path();
         let object_name = format!("{}/{}", run_id, filename);
-        let request = GetObjectRequest {
-            bucket: self.bucket_name.clone(),
-            object: object_name.clone(),
-            ..Default::default()
-        };
 
-        match self
-            .client
-            .download_object(&request, &Range::default())
+        let mut response = self
+            .storage
+            .read_object(&bucket, &object_name)
+            .send()
             .await
-        {
-            Ok(response) => Ok(Box::new(std::io::Cursor::new(response))),
-            Err(GcsError::Response(e)) if e.code == 503 => Err(Error::ServiceUnavailable),
-            Err(GcsError::Response(e)) if e.code == 404 => Err(Error::ArtifactsMissing),
-            Err(e) => Err(Error::Other(e.to_string())),
+            .map_err(|e| Error::Other(e.to_string()))?;
+
+        let mut contents = Vec::new();
+        while let Some(chunk) = response.next().await {
+            let chunk = chunk.map_err(|e| Error::Other(e.to_string()))?;
+            contents.extend_from_slice(&chunk);
         }
+
+        Ok(Box::new(std::io::Cursor::new(contents)))
     }
 
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url {
@@ -189,8 +166,8 @@ impl ArtifactManager for GCSArtifactManager {
         let encoded_object_name =
             percent_encoding::utf8_percent_encode(&object_name, percent_encoding::CONTROLS);
         format!(
-            "https://storage.googleapis.com/{}/{}/{}",
-            self.bucket_name, run_id, encoded_object_name
+            "https://storage.googleapis.com/{}/{}",
+            self.bucket_name, encoded_object_name
         )
         .parse()
         .unwrap()
@@ -202,24 +179,22 @@ impl ArtifactManager for GCSArtifactManager {
         local_path: &Path,
         filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error> {
+        let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
-        let request = ListObjectsRequest {
-            bucket: self.bucket_name.clone(),
-            prefix: Some(prefix.clone()),
-            ..Default::default()
-        };
 
-        let objects = match self.client.list_objects(&request).await {
-            Ok(response) => response.items.unwrap_or_default(),
-            Err(GcsError::Response(e)) if e.code == 503 => return Err(Error::ServiceUnavailable),
-            Err(GcsError::Response(e)) if e.code == 404 => return Err(Error::ArtifactsMissing),
-            Err(e) => return Err(Error::Other(e.to_string())),
-        };
+        let mut stream = self
+            .control
+            .list_objects()
+            .set_parent(bucket)
+            .set_prefix(&prefix)
+            .by_item();
 
-        for object in objects {
-            let name = object.name;
+        while let Some(result) = stream.next().await {
+            let object = result.map_err(|e| Error::Other(e.to_string()))?;
+            let name = &object.name;
             let file_name = name.trim_start_matches(&prefix);
-            if filter_fn.map_or(true, |f| f(file_name)) {
+
+            if filter_fn.is_none_or(|f| f(file_name)) {
                 let mut content = self.get_artifact(run_id, file_name).await?;
                 let mut file = File::create(local_path.join(file_name))?;
                 std::io::copy(&mut content, &mut file)?;
@@ -231,24 +206,16 @@ impl ArtifactManager for GCSArtifactManager {
 
     async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send> {
         let mut ids = HashSet::new();
-        let request = ListObjectsRequest {
-            bucket: self.bucket_name.clone(),
-            ..Default::default()
-        };
+        let bucket = self.bucket_path();
 
-        let objects = self
-            .client
-            .list_objects(&request)
-            .await
-            .map_err(|e| match e {
-                GcsError::Response(e) if e.code == 503 => Error::ServiceUnavailable,
-                e => Error::Other(e.to_string()),
-            })
-            .unwrap();
+        let mut stream = self.control.list_objects().set_parent(bucket).by_item();
 
-        for object in objects.items.unwrap_or_default() {
-            let id = object.name.split('/').next().unwrap().to_string();
-            ids.insert(id);
+        while let Some(result) = stream.next().await {
+            if let Ok(object) = result {
+                if let Some(id) = object.name.split('/').next() {
+                    ids.insert(id.to_string());
+                }
+            }
         }
 
         Box::new(ids.into_iter())

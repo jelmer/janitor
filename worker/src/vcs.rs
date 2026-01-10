@@ -1,4 +1,6 @@
+use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
+use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
 use janitor::vcs::VcsType;
@@ -7,7 +9,7 @@ use url::Url;
 
 /// Push a branch to a new location.
 pub fn push_branch(
-    source_branch: &dyn breezyshim::branch::Branch,
+    source_branch: &dyn breezyshim::branch::PyBranch,
     url: &Url,
     vcs_type: Option<VcsType>,
     overwrite: bool,
@@ -80,7 +82,7 @@ pub fn push_branch(
 /// * `Ok(())` if the branches were successfully imported.
 fn import_branches_bzr(
     repo_url: &Url,
-    local_branch: &dyn breezyshim::branch::Branch,
+    local_branch: &dyn breezyshim::branch::PyBranch,
     campaign: &str,
     log_id: &str,
     branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -146,7 +148,7 @@ fn import_branches_bzr(
             }
         };
         if update_current {
-            local_branch.push(target_branch.as_ref(), true, r.as_ref(), None)?;
+            local_branch.push(&*target_branch, true, r.as_ref(), None)?;
         } else {
             target_branch
                 .repository()
@@ -159,7 +161,7 @@ fn import_branches_bzr(
         for (name, revision) in tags.iter() {
             if let Some(revision) = revision {
                 // Only set tags on those branches where the revisions exist
-                if graph.is_ancestor(revision, &target_branch.last_revision()) {
+                if graph.is_ancestor(revision, &target_branch.last_revision())? {
                     target_branch
                         .tags()?
                         .set_tag(&format!("{}/{}", log_id, name), revision)?;
@@ -186,7 +188,7 @@ pub trait Vcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -201,7 +203,7 @@ impl Vcs for BzrVcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -222,7 +224,7 @@ impl Vcs for BzrVcs {
 
 fn import_branches_git(
     repo_url: &Url,
-    local_branch: &dyn breezyshim::branch::Branch,
+    local_branch: &dyn breezyshim::branch::PyBranch,
     campaign: &str,
     log_id: &str,
     branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -257,11 +259,12 @@ fn import_branches_git(
     };
 
     let repo = vcs_result_controldir.open_repository().unwrap();
+    let source_repo = local_branch.repository();
 
     // Clone for the sake of the closure
     let log_id_ = log_id.to_string();
     let campaign_ = campaign.to_string();
-    let repo_ = local_branch.repository();
+    let source_repo_for_closure = source_repo.clone();
     let branches = branches.clone();
 
     let get_changed_refs = move |_refs: &HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)>| -> HashMap<Vec<u8>, (Vec<u8>, Option<RevisionId>)> {
@@ -271,7 +274,7 @@ fn import_branches_git(
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
                 if let Some(r) = r {
-                    (repo_.lookup_bzr_revision_id(r).unwrap().0, Some(r.clone()))
+                    (source_repo_for_closure.lookup_bzr_revision_id(r).unwrap().0, Some(r.clone()))
                 } else {
                     (breezyshim::git::ZERO_SHA.to_vec(), r.clone())
                 },
@@ -287,7 +290,7 @@ fn import_branches_git(
             changed_refs.insert(
                 tagname.as_bytes().to_vec(),
                 (
-                    repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                    source_repo_for_closure.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
                     r.clone(),
                 ),
             );
@@ -296,7 +299,7 @@ fn import_branches_git(
                 changed_refs.insert(
                     tagname.as_bytes().to_vec(),
                     (
-                        repo_.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
+                        source_repo_for_closure.lookup_bzr_revision_id(r.as_ref().unwrap()).unwrap().0,
                         r.clone(),
                     ),
                 );
@@ -305,7 +308,7 @@ fn import_branches_git(
         changed_refs
     };
 
-    let inter = breezyshim::interrepository::get(&local_branch.repository(), &repo).unwrap();
+    let inter = breezyshim::interrepository::get(&source_repo, &repo).unwrap();
     inter.fetch_refs(
         std::sync::Mutex::new(Box::new(get_changed_refs)),
         false,
@@ -320,7 +323,7 @@ impl Vcs for GitVcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -342,6 +345,7 @@ impl Vcs for GitVcs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use breezyshim::tree::WorkingTree;
 
     #[test]
     fn test_push_branch() {
@@ -367,7 +371,7 @@ mod tests {
         .unwrap();
         target.create_repository(None).unwrap();
         super::push_branch(
-            source_tree.branch().as_ref(),
+            &source_tree.branch(),
             &url::Url::parse(&format!("{},branch=foo", target_url)).unwrap(),
             None,
             false,
@@ -409,7 +413,7 @@ mod tests {
         BzrVcs
             .import_branches(
                 &target_url,
-                source_tree.branch().as_ref(),
+                &source_tree.branch(),
                 "campaign",
                 "log_id",
                 &vec![(
@@ -466,7 +470,7 @@ mod tests {
         GitVcs
             .import_branches(
                 &target_url,
-                source_tree.branch().as_ref(),
+                &source_tree.branch(),
                 "campaign",
                 "log_id",
                 &vec![(

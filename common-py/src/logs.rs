@@ -48,7 +48,6 @@ impl LogFileManager {
                 f.await
             };
             r.map_err(|e| convert_logs_error_to_py(e))
-                .map(|r| Python::with_gil(|py| r.into_py(py)))
         })
     }
 
@@ -112,16 +111,14 @@ impl LogFileManager {
     ) -> PyResult<Bound<'a, PyAny>> {
         let z = self.0.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let r = z
-                .get_ctime(&codebase, &run_id, &name)
+            z.get_ctime(&codebase, &run_id, &name)
                 .await
-                .map_err(|e| convert_logs_error_to_py(e))?;
-            Ok(Python::with_gil(|py| r.into_py(py)))
+                .map_err(|e| convert_logs_error_to_py(e))
         })
     }
 
     fn __aenter__<'a>(slf: pyo3::Bound<Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        let slf = slf.clone().to_object(py);
+        let slf = slf.clone().unbind();
         pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(slf) })
     }
 
@@ -142,16 +139,12 @@ impl LogFileManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let r = z.iter_logs().await.collect::<Vec<_>>();
 
-            Python::with_gil(|py| {
-                let list = pyo3::types::PyList::empty_bound(py);
+            Python::with_gil(|py| -> PyResult<PyObject> {
+                let list = pyo3::types::PyList::empty(py);
                 for (codebase, run_id, name) in r {
-                    let tuple = pyo3::types::PyTuple::empty_bound(py);
-                    tuple.set_item(0, codebase)?;
-                    tuple.set_item(1, run_id)?;
-                    tuple.set_item(2, name)?;
-                    list.append(tuple)?;
+                    list.append((codebase, run_id, name))?;
                 }
-                Ok(list.into_py(py))
+                Ok(list.unbind().into())
             })
         })
     }
@@ -172,9 +165,6 @@ impl FileSystemLogFileManager {
 pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<LogFileManager>()?;
     module.add_class::<FileSystemLogFileManager>()?;
-    module.add(
-        "ServiceUnavailable",
-        py.get_type_bound::<ServiceUnavailable>(),
-    )?;
+    module.add("ServiceUnavailable", py.get_type::<ServiceUnavailable>())?;
     Ok(())
 }

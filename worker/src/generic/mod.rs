@@ -13,7 +13,7 @@ use std::fs::File;
 use std::path::Path;
 
 pub fn generic_make_changes(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &Path,
     argv: &[&str],
     env: &HashMap<String, String>,
@@ -117,7 +117,7 @@ pub fn generic_make_changes(
 }
 
 pub fn build_from_config(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &std::path::Path,
     output_directory: &std::path::Path,
     config: &GenericBuildConfig,
@@ -133,7 +133,7 @@ pub fn build_from_config(
 }
 
 fn build(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &Path,
     output_directory: &Path,
     schroot: Option<&str>,
@@ -435,7 +435,7 @@ impl crate::Target for GenericTarget {
 
     fn build(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         output_directory: &std::path::Path,
         config: &crate::BuildConfig,
@@ -453,7 +453,7 @@ impl crate::Target for GenericTarget {
 
     fn validate(
         &self,
-        _local_tree: &WorkingTree,
+        _local_tree: &breezyshim::workingtree::GenericWorkingTree,
         _subpath: &std::path::Path,
         _config: &crate::ValidateConfig,
     ) -> Result<(), WorkerFailure> {
@@ -462,7 +462,7 @@ impl crate::Target for GenericTarget {
 
     fn make_changes(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,

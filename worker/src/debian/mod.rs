@@ -2,7 +2,8 @@ pub mod build;
 pub mod lintian;
 
 use crate::{convert_codemod_script_failed, WorkerFailure};
-use breezyshim::tree::{Tree, WorkingTree};
+use breezyshim::tree::{PyTree, Tree, WorkingTree};
+use breezyshim::workingtree::PyWorkingTree;
 use janitor::api::worker::DebianBuildConfig;
 use silver_platter::debian::codemod::{
     script_runner as debian_script_runner, CommandResult as DebianCommandResult,
@@ -48,7 +49,7 @@ impl std::fmt::Display for DebUpdateChangelog {
 }
 
 pub fn debian_make_changes(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &Path,
     argv: &[&str],
     env: HashMap<String, String>,
@@ -72,7 +73,7 @@ pub fn debian_make_changes(
 
     // TODO(jelmer): This is only necessary for deb-new-upstream
     let sys_path = pyo3::Python::with_gil(|py| {
-        let sys = py.import_bound("sys").unwrap();
+        let sys = py.import("sys").unwrap();
         Ok::<String, pyo3::PyErr>(
             sys.getattr("path")
                 .unwrap()
@@ -84,7 +85,7 @@ pub fn debian_make_changes(
     .unwrap();
 
     let sys_executable = pyo3::Python::with_gil(|py| {
-        let sys = py.import_bound("sys").unwrap();
+        let sys = py.import("sys").unwrap();
         Ok::<String, pyo3::PyErr>(
             sys.getattr("executable")
                 .unwrap()
@@ -238,7 +239,7 @@ pub fn debian_make_changes(
 }
 
 pub fn build_from_config(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &std::path::Path,
     output_directory: &std::path::Path,
     config: &serde_json::Value,
@@ -319,7 +320,7 @@ impl crate::Target for DebianTarget {
 
     fn build(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         output_directory: &std::path::Path,
         config: &crate::BuildConfig,
@@ -329,7 +330,7 @@ impl crate::Target for DebianTarget {
 
     fn validate(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         config: &crate::ValidateConfig,
     ) -> Result<(), WorkerFailure> {
@@ -344,7 +345,7 @@ impl crate::Target for DebianTarget {
 
     fn make_changes(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,
@@ -379,7 +380,7 @@ impl std::fmt::Display for ValidateError {
 impl std::error::Error for ValidateError {}
 
 fn validate_from_config(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &std::path::Path,
     config: &serde_json::Value,
 ) -> Result<(), ValidateError> {
@@ -442,7 +443,7 @@ fn validate_from_config(
 }
 
 fn tree_set_changelog_version(
-    tree: &WorkingTree,
+    tree: &breezyshim::workingtree::GenericWorkingTree,
     build_version: &debversion::Version,
     subpath: &Path,
 ) -> Result<(), debian_analyzer::editor::EditorError> {

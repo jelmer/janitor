@@ -128,7 +128,7 @@ impl ArtifactManager {
     }
 
     fn __aenter__<'a>(slf: pyo3::Bound<Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
-        let slf = slf.clone().to_object(py);
+        let slf = slf.clone().unbind();
         pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(slf) })
     }
 
@@ -238,16 +238,13 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<LocalArtifactManager>()?;
     module.add_class::<GCSArtifactManager>()?;
 
-    module.add_function(wrap_pyfunction_bound!(list_ids, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_artifact_manager, module)?)?;
+    module.add_function(wrap_pyfunction!(list_ids, module)?)?;
+    module.add_function(wrap_pyfunction!(get_artifact_manager, module)?)?;
 
-    module.add_function(wrap_pyfunction_bound!(upload_backup_artifacts, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(store_artifacts_with_backup, module)?)?;
+    module.add_function(wrap_pyfunction!(upload_backup_artifacts, module)?)?;
+    module.add_function(wrap_pyfunction!(store_artifacts_with_backup, module)?)?;
 
-    module.add(
-        "ServiceUnavailable",
-        py.get_type_bound::<ServiceUnavailable>(),
-    )?;
-    module.add("ArtifactsMissing", py.get_type_bound::<ArtifactsMissing>())?;
+    module.add("ServiceUnavailable", py.get_type::<ServiceUnavailable>())?;
+    module.add("ArtifactsMissing", py.get_type::<ArtifactsMissing>())?;
     Ok(())
 }

@@ -1,4 +1,6 @@
 use patchkit::unified::{iter_hunks, HunkLine};
+use pyo3::prelude::*;
+use pyo3::{Py, PyAny, Python};
 use std::path::PathBuf;
 use tracing::{debug, warn};
 
@@ -28,34 +30,6 @@ pub struct DiffoscopeOutput {
     /// Nested details for sub-comparisons of components within the files.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub details: Vec<DiffoscopeOutput>,
-}
-
-/// Implementation of the ToPyObject trait for DiffoscopeOutput.
-///
-/// This allows DiffoscopeOutput to be converted to a Python object,
-/// which is necessary for interacting with Python diffoscope modules.
-impl pyo3::ToPyObject for DiffoscopeOutput {
-    /// Convert DiffoscopeOutput to a Python object.
-    ///
-    /// # Arguments
-    /// * `py` - The Python interpreter
-    ///
-    /// # Returns
-    /// A Python dictionary representing the DiffoscopeOutput
-    fn to_object(&self, py: pyo3::Python) -> pyo3::PyObject {
-        use pyo3::prelude::*;
-        let dict = pyo3::types::PyDict::new_bound(py);
-        dict.set_item("diffoscope_json_version", self.diffoscope_json_version)
-            .unwrap();
-        dict.set_item("source1", self.source1.to_str().unwrap())
-            .unwrap();
-        dict.set_item("source2", self.source2.to_str().unwrap())
-            .unwrap();
-        dict.set_item("comments", &self.comments).unwrap();
-        dict.set_item("unified_diff", &self.unified_diff).unwrap();
-        dict.set_item("details", &self.details).unwrap();
-        dict.into()
-    }
 }
 
 /// Errors that can occur when running diffoscope.
@@ -353,26 +327,28 @@ pub fn format_diffoscope(
     css_url: Option<&str>,
 ) -> Result<String, pyo3::PyErr> {
     use pyo3::prelude::*;
-    pyo3::prepare_freethreaded_python();
     if content_type == "application/json" {
         return Ok(serde_json::to_string(diff).unwrap());
     }
 
     Python::with_gil(|py| {
-        let m = py.import_bound("diffoscope.readers.json")?;
+        let m = py.import("diffoscope.readers.json")?;
         let reader = m.getattr("JSONReaderV1")?.call0()?;
 
-        let root_differ = reader.call_method1("load_rec", (diff.to_object(py),))?;
+        let json_str = serde_json::to_string(&diff).unwrap();
+        let json_mod = py.import("json")?;
+        let py_dict = json_mod.call_method1("loads", (json_str,))?;
+        let root_differ = reader.call_method1("load_rec", (py_dict,))?;
 
         match content_type {
             "text/html" => {
-                let m = py.import_bound("diffoscope.presenters.html")?;
+                let m = py.import("diffoscope.presenters.html")?;
                 let p = m.getattr("HTMLPresenter")?.call0()?;
 
-                let sysm = py.import_bound("sys")?;
+                let sysm = py.import("sys")?;
 
                 let old_stdout = sysm.getattr("stdout")?;
-                let io = py.import_bound("io")?;
+                let io = py.import("io")?;
                 let f = io.getattr("StringIO")?.call0()?;
                 sysm.setattr("stdout", f.clone())?;
                 let old_argv = sysm.getattr("argv")?;
@@ -381,7 +357,7 @@ pub fn format_diffoscope(
                     title.split(' ').map(|s| s.into()).collect::<Vec<String>>(),
                 )?;
 
-                let kwargs = pyo3::types::PyDict::new_bound(py);
+                let kwargs = pyo3::types::PyDict::new(py);
                 kwargs.set_item("css_url", css_url)?;
                 p.call_method("output_html", ("-", root_differ), Some(&kwargs))?;
                 let html = f.call_method0("getvalue")?;
@@ -392,8 +368,8 @@ pub fn format_diffoscope(
                 Ok(html.extract::<String>()?)
             }
             "text/markdown" => {
-                let m = py.import_bound("diffoscope.presenters.markdown")?;
-                let out = std::sync::Arc::new(pyo3::types::PyList::empty_bound(py).to_object(py));
+                let m = py.import("diffoscope.presenters.markdown")?;
+                let out = std::sync::Arc::new(pyo3::types::PyList::empty(py).unbind());
 
                 let println_out = out.clone();
 
@@ -411,16 +387,15 @@ pub fn format_diffoscope(
                     Ok(())
                 };
 
-                let pyprintln =
-                    pyo3::types::PyCFunction::new_closure_bound(py, None, None, println)?;
+                let pyprintln = pyo3::types::PyCFunction::new_closure(py, None, None, println)?;
 
                 let presenter = m.getattr("MarkdownTextPresenter")?.call1((pyprintln,))?;
                 presenter.call_method1("start", (root_differ,))?;
                 Ok(out.extract::<Vec<String>>(py)?.join("\n"))
             }
             "text/plain" => {
-                let m = py.import_bound("diffoscope.presenters.text")?;
-                let out = pyo3::types::PyList::empty_bound(py);
+                let m = py.import("diffoscope.presenters.text")?;
+                let out = pyo3::types::PyList::empty(py);
 
                 let presenter = m
                     .getattr("TextPresenter")?

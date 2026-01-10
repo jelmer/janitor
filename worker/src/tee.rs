@@ -1,12 +1,13 @@
 use nix::unistd::{close, dup, dup2};
 use std::fs::File;
 use std::io::{self, Write};
+use std::os::fd::{BorrowedFd, FromRawFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::process::{Command, Stdio};
 
 pub struct CopyOutput {
-    old_stdout: RawFd,
-    old_stderr: RawFd,
+    old_stdout: OwnedFd,
+    old_stderr: OwnedFd,
     tee: bool,
     process: Option<std::process::Child>,
     newfd: Option<File>,
@@ -14,8 +15,10 @@ pub struct CopyOutput {
 
 impl CopyOutput {
     pub fn new(output_log: &std::path::Path, tee: bool) -> io::Result<Self> {
-        let old_stdout = dup(nix::libc::STDOUT_FILENO).expect("Failed to duplicate stdout");
-        let old_stderr = dup(nix::libc::STDERR_FILENO).expect("Failed to duplicate stderr");
+        let old_stdout = dup(unsafe { BorrowedFd::borrow_raw(nix::libc::STDOUT_FILENO) })
+            .expect("Failed to duplicate stdout");
+        let old_stderr = dup(unsafe { BorrowedFd::borrow_raw(nix::libc::STDERR_FILENO) })
+            .expect("Failed to duplicate stderr");
 
         let mut process = None;
         let newfd: Option<File>;
@@ -25,24 +28,24 @@ impl CopyOutput {
                 .arg(output_log)
                 .stdin(Stdio::piped())
                 .spawn()?;
-            dup2(
-                p.stdin.as_ref().unwrap().as_raw_fd(),
-                nix::libc::STDOUT_FILENO,
-            )
-            .expect("Failed to redirect stdout to tee");
-            dup2(
-                p.stdin.as_ref().unwrap().as_raw_fd(),
-                nix::libc::STDERR_FILENO,
-            )
-            .expect("Failed to redirect stderr to tee");
+            let mut stdout_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDOUT_FILENO) };
+            let mut stderr_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDERR_FILENO) };
+            dup2(p.stdin.as_ref().unwrap(), &mut stdout_fd)
+                .expect("Failed to redirect stdout to tee");
+            dup2(p.stdin.as_ref().unwrap(), &mut stderr_fd)
+                .expect("Failed to redirect stderr to tee");
+            std::mem::forget(stdout_fd);
+            std::mem::forget(stderr_fd);
             process = Some(p);
             newfd = None;
         } else {
             let file = File::create(output_log)?;
-            dup2(file.as_raw_fd(), nix::libc::STDOUT_FILENO)
-                .expect("Failed to redirect stdout to file");
-            dup2(file.as_raw_fd(), nix::libc::STDERR_FILENO)
-                .expect("Failed to redirect stderr to file");
+            let mut stdout_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDOUT_FILENO) };
+            let mut stderr_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDERR_FILENO) };
+            dup2(&file, &mut stdout_fd).expect("Failed to redirect stdout to file");
+            dup2(&file, &mut stderr_fd).expect("Failed to redirect stderr to file");
+            std::mem::forget(stdout_fd);
+            std::mem::forget(stderr_fd);
             newfd = Some(file);
         }
 
@@ -59,10 +62,12 @@ impl CopyOutput {
 impl Drop for CopyOutput {
     fn drop(&mut self) {
         // Restore original stdout and stderr
-        dup2(self.old_stdout, nix::libc::STDOUT_FILENO).expect("Failed to restore stdout");
-        dup2(self.old_stderr, nix::libc::STDERR_FILENO).expect("Failed to restore stderr");
-        close(self.old_stdout).expect("Failed to close old stdout");
-        close(self.old_stderr).expect("Failed to close old stderr");
+        let mut stdout_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDOUT_FILENO) };
+        let mut stderr_fd = unsafe { OwnedFd::from_raw_fd(nix::libc::STDERR_FILENO) };
+        dup2(&self.old_stdout, &mut stdout_fd).expect("Failed to restore stdout");
+        dup2(&self.old_stderr, &mut stderr_fd).expect("Failed to restore stderr");
+        std::mem::forget(stdout_fd); // Don't close stdout/stderr
+        std::mem::forget(stderr_fd);
 
         // Ensure process or file is cleaned up
         if self.tee {

@@ -258,16 +258,16 @@ impl Campaign {
     }
 
     #[getter]
-    pub fn build(&self, py: Python) -> Option<PyObject> {
+    pub fn build(&self, py: Python) -> PyResult<Option<PyObject>> {
         match self.0.build.as_ref() {
             Some(janitor::config::config::campaign::Build::DebianBuild(d)) => {
-                Some(DebianBuild(d.clone()).into_py(py))
+                Ok(Some(Py::new(py, DebianBuild(d.clone()))?.into_any()))
             }
             Some(janitor::config::config::campaign::Build::GenericBuild(g)) => {
-                Some(GenericBuild(g.clone()).into_py(py))
+                Ok(Some(Py::new(py, GenericBuild(g.clone()))?.into_any()))
             }
             Some(_) => unreachable!(),
-            None => None,
+            None => Ok(None),
         }
     }
 
@@ -492,9 +492,9 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<DebianBuild>()?;
     module.add_class::<GenericBuild>()?;
     module.add_class::<Select>()?;
-    module.add_function(wrap_pyfunction_bound!(read_config, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_campaign_config, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_distribution, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(read_string, module)?)?;
+    module.add_function(wrap_pyfunction!(read_config, module)?)?;
+    module.add_function(wrap_pyfunction!(get_campaign_config, module)?)?;
+    module.add_function(wrap_pyfunction!(get_distribution, module)?)?;
+    module.add_function(wrap_pyfunction!(read_string, module)?)?;
     Ok(())
 }

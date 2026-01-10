@@ -12,8 +12,8 @@ mod logs;
 mod vcs;
 
 #[pyfunction]
-fn get_branch_vcs_type(branch: PyObject) -> PyResult<String> {
-    let branch = breezyshim::branch::GenericBranch::new(branch);
+fn get_branch_vcs_type(py: Python, branch: Py<PyAny>) -> PyResult<String> {
+    let branch = breezyshim::branch::GenericBranch::from(branch.into_bound(py));
     janitor::vcs::get_branch_vcs_type(&branch)
         .map_err(|e| PyValueError::new_err((format!("{}", e),)))
         .map(|vcs| vcs.to_string())
@@ -41,23 +41,23 @@ pub fn _common(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(is_alioth_url, m)?)?;
     m.add_function(wrap_pyfunction!(get_branch_vcs_type, m)?)?;
 
-    let artifactsm = pyo3::types::PyModule::new_bound(py, "artifacts")?;
+    let artifactsm = pyo3::types::PyModule::new(py, "artifacts")?;
     crate::artifacts::init(py, &artifactsm)?;
     m.add_submodule(&artifactsm)?;
 
-    let vcsm = pyo3::types::PyModule::new_bound(py, "vcs")?;
+    let vcsm = pyo3::types::PyModule::new(py, "vcs")?;
     crate::vcs::init(py, &vcsm)?;
     m.add_submodule(&vcsm)?;
 
-    let logsm = pyo3::types::PyModule::new_bound(py, "logs")?;
+    let logsm = pyo3::types::PyModule::new(py, "logs")?;
     crate::logs::init(py, &logsm)?;
     m.add_submodule(&logsm)?;
 
-    let configm = pyo3::types::PyModule::new_bound(py, "config")?;
+    let configm = pyo3::types::PyModule::new(py, "config")?;
     crate::config::init(py, &configm)?;
     m.add_submodule(&configm)?;
 
-    let debdiff = PyModule::new_bound(py, "debdiff")?;
+    let debdiff = PyModule::new(py, "debdiff")?;
     crate::debdiff::init_module(py, &debdiff)?;
     m.add_submodule(&debdiff)?;
 

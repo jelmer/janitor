@@ -1,7 +1,9 @@
+use breezyshim::branch::Branch;
 use breezyshim::controldir::ControlDirFormat;
 use breezyshim::error::Error as BrzError;
 use breezyshim::transport::Transport;
 use breezyshim::tree::{MutableTree, WorkingTree};
+use breezyshim::workingtree::PyWorkingTree;
 pub use breezyshim::RevisionId;
 use reqwest::header::{HeaderMap, HeaderValue};
 use std::collections::HashMap;
@@ -143,7 +145,7 @@ pub trait Target {
 
     fn build(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         output_directory: &std::path::Path,
         config: &BuildConfig,
@@ -151,14 +153,14 @@ pub trait Target {
 
     fn validate(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         config: &ValidateConfig,
     ) -> Result<(), WorkerFailure>;
 
     fn make_changes(
         &self,
-        local_tree: &WorkingTree,
+        local_tree: &breezyshim::workingtree::GenericWorkingTree,
         subpath: &std::path::Path,
         argv: &[&str],
         log_directory: &std::path::Path,
@@ -205,23 +207,24 @@ where
 {
     use pyo3::prelude::*;
     Python::with_gil(|py| match value {
-        serde_json::Value::Null => py.None().into_py(py),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new_bound(py, *b).into_py(py),
-        serde_json::Value::Number(n) => {
-            pyo3::types::PyFloat::new_bound(py, n.as_f64().unwrap()).into_py(py)
-        }
-        serde_json::Value::String(s) => {
-            pyo3::types::PyString::new_bound(py, s.as_str()).into_py(py)
-        }
-        serde_json::Value::Array(a) => {
-            pyo3::types::PyList::new_bound(py, a.iter().map(serde_json_to_py)).into_py(py)
-        }
+        serde_json::Value::Null => py.None(),
+        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, *b).as_any().clone().unbind(),
+        serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap())
+            .into_any()
+            .unbind(),
+        serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str())
+            .into_any()
+            .unbind(),
+        serde_json::Value::Array(a) => pyo3::types::PyList::new(py, a.iter().map(serde_json_to_py))
+            .unwrap()
+            .into_any()
+            .unbind(),
         serde_json::Value::Object(o) => {
-            let ret = pyo3::types::PyDict::new_bound(py);
+            let ret = pyo3::types::PyDict::new(py);
             for (k, v) in o.into_iter() {
                 ret.set_item(k, serde_json_to_py(v)).unwrap();
             }
-            ret.into_py(py)
+            ret.into_any().unbind()
         }
     })
 }
@@ -275,7 +278,7 @@ pub fn run_worker(
         }
     };
 
-    let main_branch: Option<Box<dyn breezyshim::branch::Branch>>;
+    let main_branch: Option<breezyshim::branch::GenericBranch>;
     let empty_format: Option<ControlDirFormat>;
 
     if let Some(main_branch_url) = main_branch_url {
@@ -304,9 +307,8 @@ pub fn run_worker(
             }
         };
         metadata.branch_url = Some(main_branch.as_ref().unwrap().get_user_url());
-        metadata.vcs_type = Some(
-            janitor::vcs::get_branch_vcs_type(main_branch.as_ref().unwrap().as_ref()).unwrap(),
-        );
+        metadata.vcs_type =
+            Some(janitor::vcs::get_branch_vcs_type(main_branch.as_ref().unwrap()).unwrap());
         metadata.subpath = Some(subpath.to_string_lossy().to_string());
         empty_format = None;
     } else {
@@ -348,7 +350,7 @@ pub fn run_worker(
             Ok(b) => {
                 log::info!(
                     "Using cached branch {}",
-                    silver_platter::vcs::full_branch_url(b.as_ref())
+                    silver_platter::vcs::full_branch_url(&b)
                 );
                 Some(b)
             }
@@ -820,8 +822,7 @@ pub fn run_worker(
         metadata.add_tag(n.to_string(), r.clone());
     }
 
-    let actual_vcs_type =
-        janitor::vcs::get_branch_vcs_type(ws.local_tree().branch().as_ref()).unwrap();
+    let actual_vcs_type = janitor::vcs::get_branch_vcs_type(&ws.local_tree().branch()).unwrap();
 
     let vcs_type = if vcs_type.is_none() {
         actual_vcs_type
@@ -847,7 +848,7 @@ pub fn run_worker(
     }
     .import_branches(
         target_repo_url,
-        ws.local_tree().branch().as_ref(),
+        &ws.local_tree().branch(),
         campaign,
         run_id,
         &result_branches,
@@ -883,7 +884,7 @@ pub fn run_worker(
     }
     .import_branches(
         target_repo_url,
-        ws.local_tree().branch().as_ref(),
+        &ws.local_tree().branch(),
         campaign,
         run_id,
         &result_branches,
@@ -904,7 +905,7 @@ pub fn run_worker(
 
         if let Some(main_branch) = ws.main_branch() {
             match crate::vcs::push_branch(
-                ws.local_tree().branch().as_ref(),
+                &ws.local_tree().branch(),
                 cached_branch_url,
                 Some(vcs_type),
                 true,
