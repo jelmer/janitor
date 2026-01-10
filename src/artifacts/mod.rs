@@ -75,7 +75,7 @@ pub async fn get_artifact_manager(location: &str) -> Result<Box<dyn ArtifactMana
         #[cfg(feature = "gcs")]
         {
             Ok(Box::new(
-                GCSArtifactManager::new(location.parse().unwrap(), None).await?,
+                GCSArtifactManager::from_url(&location.parse().unwrap()).await?,
             ))
         }
         #[cfg(not(feature = "gcs"))]

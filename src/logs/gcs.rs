@@ -1,17 +1,11 @@
 use async_trait::async_trait;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use google_cloud_auth::credentials::CredentialsFile;
-use google_cloud_storage::client::{Client, ClientConfig};
-use google_cloud_storage::http::buckets::get::GetBucketRequest;
-use google_cloud_storage::http::buckets::Bucket;
-use google_cloud_storage::http::objects::download::Range;
-use google_cloud_storage::http::objects::get::GetObjectRequest;
-use google_cloud_storage::http::objects::list::ListObjectsRequest;
-use google_cloud_storage::http::objects::upload::{Media, UploadObjectRequest, UploadType};
-use std::borrow::Cow;
+use google_cloud_gax::paginator::ItemPaginator;
+use google_cloud_storage::client::{Storage, StorageControl};
 use std::collections::HashMap;
 use std::io::{self, Cursor, Read};
 use std::path::PathBuf;
@@ -21,15 +15,13 @@ use tokio::io::AsyncReadExt;
 use crate::logs::{Error, LogFileManager};
 
 pub struct GCSLogFileManager {
-    client: Client,
-    bucket: Bucket,
+    bucket_name: String,
+    storage: Storage,
+    control: StorageControl,
 }
 
 impl GCSLogFileManager {
-    pub async fn from_url(
-        location: &url::Url,
-        creds: Option<CredentialsFile>,
-    ) -> Result<Self, Error> {
+    pub async fn from_url(location: &url::Url) -> Result<Self, Error> {
         if location.scheme() != "gs" {
             return Err(Error::Other(format!(
                 "Invalid scheme: {}",
@@ -41,34 +33,29 @@ impl GCSLogFileManager {
             .host_str()
             .ok_or_else(|| Error::Other("Missing bucket name".to_string()))?;
 
-        Self::new(bucket_name, creds).await
+        Self::new(bucket_name.to_string()).await
     }
 
-    pub async fn new(bucket_name: &str, creds: Option<CredentialsFile>) -> Result<Self, Error> {
-        let mut config = ClientConfig::default();
+    pub async fn new(bucket_name: String) -> Result<Self, Error> {
+        let storage = Storage::builder()
+            .build()
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
 
-        if let Some(creds) = creds {
-            config = match config.with_credentials(creds).await {
-                Ok(config) => config,
-                Err(e) => return Err(Error::Other(e.to_string())),
-            };
-        } else {
-            config = config.anonymous();
-        }
+        let control = StorageControl::builder()
+            .build()
+            .await
+            .map_err(|e| Error::Other(e.to_string()))?;
 
-        let client = Client::new(config);
+        Ok(Self {
+            bucket_name,
+            storage,
+            control,
+        })
+    }
 
-        let get_bucket_request = GetBucketRequest {
-            bucket: bucket_name.to_owned(),
-            ..Default::default()
-        };
-
-        let bucket = match client.get_bucket(&get_bucket_request).await {
-            Ok(bucket) => bucket,
-            Err(e) => return Err(Error::Other(e.to_string())),
-        };
-
-        Ok(Self { client, bucket })
+    fn bucket_path(&self) -> String {
+        format!("projects/_/buckets/{}", self.bucket_name)
     }
 
     fn get_object_name(&self, codebase: &str, run_id: &str, name: &str) -> String {
@@ -79,19 +66,18 @@ impl GCSLogFileManager {
 #[async_trait]
 impl LogFileManager for GCSLogFileManager {
     async fn has_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<bool, Error> {
+        let bucket = self.bucket_path();
         let object_name = self.get_object_name(codebase, run_id, name);
 
-        let get_request = GetObjectRequest {
-            bucket: self.bucket.name.clone(),
-            object: object_name,
-            ..Default::default()
-        };
-
-        match self.client.get_object(&get_request).await {
-            Ok(_) => {
-                // If we can get the object, it exists
-                Ok(true)
-            }
+        match self
+            .control
+            .get_object()
+            .set_bucket(bucket)
+            .set_object(object_name)
+            .send()
+            .await
+        {
+            Ok(_) => Ok(true),
             Err(e) => {
                 if e.to_string().contains("Not Found") {
                     Ok(false)
@@ -108,48 +94,31 @@ impl LogFileManager for GCSLogFileManager {
         run_id: &str,
         name: &str,
     ) -> Result<Box<dyn Read + Send + Sync>, Error> {
+        let bucket = self.bucket_path();
         let object_name = self.get_object_name(codebase, run_id, name);
 
-        // Check if the object exists first
-        let get_request = GetObjectRequest {
-            bucket: self.bucket.name.clone(),
-            object: object_name.clone(),
-            ..Default::default()
-        };
-
-        match self.client.get_object(&get_request).await {
-            Ok(_) => {
-                // Download the object content with full range
-                let download_req = GetObjectRequest {
-                    bucket: self.bucket.name.clone(),
-                    object: object_name,
-                    ..Default::default()
-                };
-
-                let range = Range::default();
-
-                let bytes = match self.client.download_object(&download_req, &range).await {
-                    Ok(data) => data,
-                    Err(e) => return Err(Error::Other(e.to_string())),
-                };
-
-                // Create a cursor for the data
-                let cursor = Cursor::new(bytes);
-
-                // Create a flate2 decoder
-                let decoder = GzDecoder::new(cursor);
-
-                // Return the decoder as a boxed Read
-                Ok(Box::new(decoder) as Box<dyn Read + Send + Sync>)
-            }
-            Err(e) => {
+        let mut response = self
+            .storage
+            .read_object(&bucket, &object_name)
+            .send()
+            .await
+            .map_err(|e| {
                 if e.to_string().contains("Not Found") {
-                    Err(Error::NotFound)
+                    Error::NotFound
                 } else {
-                    Err(Error::Other(e.to_string()))
+                    Error::Other(e.to_string())
                 }
-            }
+            })?;
+
+        let mut contents = Vec::new();
+        while let Some(chunk) = response.next().await {
+            let chunk = chunk.map_err(|e| Error::Other(e.to_string()))?;
+            contents.extend_from_slice(&chunk);
         }
+
+        let cursor = Cursor::new(contents);
+        let decoder = GzDecoder::new(cursor);
+        Ok(Box::new(decoder) as Box<dyn Read + Send + Sync>)
     }
 
     async fn import_log(
@@ -182,6 +151,7 @@ impl LogFileManager for GCSLogFileManager {
         let basename_ref = basename.unwrap_or_else(|| basename_owned.as_ref().unwrap());
 
         // Generate the final object name
+        let bucket = self.bucket_path();
         let object_name = self.get_object_name(codebase, run_id, basename_ref);
 
         let mut file = File::open(orig_path).await?;
@@ -194,39 +164,20 @@ impl LogFileManager for GCSLogFileManager {
             .map_err(|e| Error::Other(e.to_string()))?;
         let compressed_data = encoder.finish().map_err(|e| Error::Other(e.to_string()))?;
 
-        // Upload to GCS
-        let request = UploadObjectRequest {
-            bucket: self.bucket.name.clone(),
-            predefined_acl: None,
-            // Other fields use default values
-            ..Default::default()
-        };
-
-        // Create a Media object with the object name and content length
-        let media = Media {
-            name: Cow::Owned(object_name),
-            content_type: Cow::Borrowed("application/octet-stream"),
-            content_length: Some(compressed_data.len() as u64),
-        };
-
-        // Use the simple upload type
-        let upload_type = UploadType::Simple(media);
-
-        // Execute the upload
-        match self
-            .client
-            .upload_object(&request, compressed_data, &upload_type)
+        // Upload to GCS using the new API
+        self.storage
+            .write_object(&bucket, &object_name, Bytes::from(compressed_data))
+            .send_unbuffered()
             .await
-        {
-            Ok(_) => Ok(()),
-            Err(e) => {
+            .map_err(|e| {
                 if e.to_string().contains("Permission") {
-                    Err(Error::PermissionDenied)
+                    Error::PermissionDenied
                 } else {
-                    Err(Error::Other(e.to_string()))
+                    Error::Other(e.to_string())
                 }
-            }
-        }
+            })?;
+
+        Ok(())
     }
 
     async fn iter_logs(&self) -> Box<dyn Iterator<Item = (String, String, Vec<String>)>> {
@@ -243,21 +194,23 @@ impl LogFileManager for GCSLogFileManager {
         run_id: &str,
         name: &str,
     ) -> Result<DateTime<Utc>, Error> {
+        let bucket = self.bucket_path();
         let object_name = self.get_object_name(codebase, run_id, name);
 
-        let get_request = GetObjectRequest {
-            bucket: self.bucket.name.clone(),
-            object: object_name,
-            ..Default::default()
-        };
-
-        match self.client.get_object(&get_request).await {
+        match self
+            .control
+            .get_object()
+            .set_bucket(bucket)
+            .set_object(object_name)
+            .send()
+            .await
+        {
             Ok(object) => {
-                // Extract time_created from the metadata
-                if let Some(time_created) = object.time_created {
-                    // Convert from time::OffsetDateTime to chrono::DateTime<Utc>
-                    let timestamp = time_created.unix_timestamp();
-                    let nsecs = time_created.nanosecond();
+                // Extract create_time from the metadata
+                if let Some(create_time) = object.create_time {
+                    // Convert from wkt::Timestamp to chrono::DateTime<Utc>
+                    let timestamp = create_time.seconds();
+                    let nsecs = create_time.nanos() as u32;
                     if let Some(dt) = DateTime::<Utc>::from_timestamp(timestamp, nsecs) {
                         Ok(dt)
                     } else {
@@ -284,23 +237,17 @@ impl GCSLogFileManager {
     // Helper method to implement iter_logs functionality
     async fn iter_logs_internal(&self) -> Result<Vec<(String, String, Vec<String>)>, Error> {
         let mut logs: HashMap<(String, String), Vec<String>> = HashMap::new();
+        let bucket = self.bucket_path();
 
-        let list_request = ListObjectsRequest {
-            bucket: self.bucket.name.clone(),
-            delimiter: None,
-            prefix: None,
-            ..Default::default()
-        };
+        let mut stream = self
+            .control
+            .list_objects()
+            .set_parent(bucket)
+            .by_item();
 
-        let response = match self.client.list_objects(&list_request).await {
-            Ok(response) => response,
-            Err(e) => return Err(Error::Other(e.to_string())),
-        };
-
-        // Process each object in the listing
-        for item in response.items.unwrap_or_default() {
-            // Get the name from the item directly (no Option in this API version)
-            let name = item.name;
+        while let Some(result) = stream.next().await {
+            let object = result.map_err(|e| Error::Other(e.to_string()))?;
+            let name = &object.name;
 
             // Parse object name into components
             let parts: Vec<&str> = name.split('/').collect();
