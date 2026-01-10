@@ -1,4 +1,5 @@
 use crate::Mode;
+use breezyshim::branch::Branch;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
 use sqlx::{FromRow, PgPool, Row};

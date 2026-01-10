@@ -2,7 +2,7 @@ use breezyshim::RevisionId;
 
 use pyo3::basic::CompareOp;
 use pyo3::create_exception;
-use pyo3::exceptions::{PyNotImplementedError, PyValueError};
+use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 use std::collections::HashMap;
@@ -16,7 +16,7 @@ pub struct RevisionInfo(pub(crate) janitor::vcs::RevisionInfo);
 impl RevisionInfo {
     #[getter]
     fn commit_id<'a>(&self, py: Python<'a>) -> Option<Bound<'a, PyBytes>> {
-        self.0.commit_id.as_ref().map(|x| PyBytes::new_bound(py, x))
+        self.0.commit_id.as_ref().map(|x| PyBytes::new(py, x))
     }
 
     #[getter]
@@ -64,9 +64,7 @@ impl VcsManager {
         let z = self.0.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let diff = z.get_diff(&codebase, &old_revid, &new_revid).await;
-            Ok(Python::with_gil(|py| {
-                PyBytes::new_bound(py, &diff).to_object(py)
-            }))
+            Ok(Python::with_gil(|py| PyBytes::new(py, &diff).unbind()))
         })
     }
 
@@ -87,21 +85,23 @@ impl VcsManager {
         })
     }
 
-    fn get_repository<'a>(&self, py: Python<'a>, codebase: String) -> PyResult<PyObject> {
-        let repo = self.0.get_repository(&codebase)?;
-
-        Ok(repo.to_object(py))
+    fn get_repository(
+        &self,
+        codebase: String,
+    ) -> PyResult<Option<breezyshim::repository::GenericRepository>> {
+        self.0
+            .get_repository(&codebase)
+            .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
     }
 
-    fn get_branch<'a>(
+    fn get_branch(
         &self,
-        py: Python<'a>,
         codebase: String,
         branch_name: String,
-    ) -> PyResult<Option<PyObject>> {
-        let branch = self.0.get_branch(&codebase, &branch_name)?;
-
-        Ok(branch.map(|x| x.to_object(py)))
+    ) -> PyResult<Option<breezyshim::branch::GenericBranch>> {
+        self.0
+            .get_branch(&codebase, &branch_name)
+            .map_err(|e| PyRuntimeError::new_err(format!("{}", e)))
     }
 }
 
@@ -258,8 +258,8 @@ impl RemoteBzrVcsManager {
 #[pyfunction]
 pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyResult<PyObject> {
     match name {
-        "bzr" => Ok(Py::new(py, LocalBzrVcsManager::new(location).unwrap())?.to_object(py)),
-        "git" => Ok(Py::new(py, LocalGitVcsManager::new(location).unwrap())?.to_object(py)),
+        "bzr" => Ok(Py::new(py, LocalBzrVcsManager::new(location).unwrap())?.into_any()),
+        "git" => Ok(Py::new(py, LocalGitVcsManager::new(location).unwrap())?.into_any()),
         _ => {
             return Err(UnsupportedVcs::new_err((
                 name.to_string(),
@@ -272,8 +272,8 @@ pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyRes
 #[pyfunction]
 pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObject> {
     match name {
-        "bzr" => Ok(Py::new(py, RemoteBzrVcsManager::new(location).unwrap())?.to_object(py)),
-        "git" => Ok(Py::new(py, RemoteGitVcsManager::new(location).unwrap())?.to_object(py)),
+        "bzr" => Ok(Py::new(py, RemoteBzrVcsManager::new(location).unwrap())?.into_any()),
+        "git" => Ok(Py::new(py, RemoteGitVcsManager::new(location).unwrap())?.into_any()),
         _ => {
             return Err(UnsupportedVcs::new_err((
                 name.to_string(),
@@ -320,22 +320,15 @@ create_exception!(janitor.vcs, UnsupportedVcs, pyo3::exceptions::PyException);
 #[pyfunction]
 #[pyo3(signature = (vcs_url, possible_transports=None, probers=None))]
 pub fn open_branch_ext(
-    py: Python,
     vcs_url: &str,
     possible_transports: Option<Vec<PyObject>>,
     probers: Option<Vec<PyObject>>,
-) -> Result<PyObject, PyErr> {
+) -> Result<breezyshim::branch::GenericBranch, PyErr> {
     let vcs_url = url::Url::parse(vcs_url).map_err(|e| PyValueError::new_err(format!("{}", e)))?;
     // TODO: support possible_transports
     // TODO: support probers
-    match janitor::vcs::open_branch_ext(&vcs_url, None, None) {
-        Ok(b) => Ok(b.to_object(py)),
-        Err(e) => Err(BranchOpenFailure::new_err((
-            e.code,
-            e.description,
-            e.retry_after,
-        ))),
-    }
+    janitor::vcs::open_branch_ext(&vcs_url, None, None)
+        .map_err(|e| BranchOpenFailure::new_err((e.code, e.description, e.retry_after)))
 }
 
 pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
@@ -345,15 +338,12 @@ pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<LocalBzrVcsManager>()?;
     module.add_class::<RemoteBzrVcsManager>()?;
     module.add_class::<RevisionInfo>()?;
-    module.add_function(wrap_pyfunction_bound!(get_local_vcs_manager, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_remote_vcs_manager, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_vcs_manager, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(get_vcs_managers, module)?)?;
-    module.add_function(wrap_pyfunction_bound!(open_branch_ext, module)?)?;
-    module.add(
-        "BranchOpenFailure",
-        py.get_type_bound::<BranchOpenFailure>(),
-    )?;
-    module.add("UnsupportedVcs", py.get_type_bound::<UnsupportedVcs>())?;
+    module.add_function(wrap_pyfunction!(get_local_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction!(get_remote_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction!(get_vcs_manager, module)?)?;
+    module.add_function(wrap_pyfunction!(get_vcs_managers, module)?)?;
+    module.add_function(wrap_pyfunction!(open_branch_ext, module)?)?;
+    module.add("BranchOpenFailure", py.get_type::<BranchOpenFailure>())?;
+    module.add("UnsupportedVcs", py.get_type::<UnsupportedVcs>())?;
     Ok(())
 }

@@ -9,6 +9,7 @@ use crate::PublishError;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::{determine_title, Forge, MergeProposal};
+use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
 use minijinja::Environment;
@@ -23,7 +24,7 @@ fn drop_env(args: &mut Vec<String>) {
     }
 }
 
-fn is_remote_git_branch(branch: &dyn Branch) -> bool {
+fn is_remote_git_branch(branch: &dyn breezyshim::branch::PyBranch) -> bool {
     use pyo3::prelude::*;
     Python::with_gil(|py| {
         let b = branch.to_object(py);
@@ -84,8 +85,8 @@ pub fn publish_one(
         }
     };
 
-    let temp_sprout = if is_remote_git_branch(source_branch.as_ref()) {
-        let sprout = silver_platter::utils::TempSprout::new(source_branch.as_ref(), None).unwrap();
+    let temp_sprout = if is_remote_git_branch(&source_branch) {
+        let sprout = silver_platter::utils::TempSprout::new(&source_branch, None).unwrap();
         source_branch = sprout.tree().branch();
         Some(sprout)
     } else {
@@ -139,7 +140,7 @@ pub fn publish_one(
 
     assert_ne!(request.mode, Mode::Bts);
 
-    let forge: Option<Forge> = match breezyshim::forge::get_forge(target_branch.as_ref()) {
+    let forge: Option<Forge> = match breezyshim::forge::get_forge(&target_branch) {
         Err(e @ BrzError::UnsupportedForge(..)) => {
             if ![Mode::Push, Mode::BuildOnly].contains(&request.mode) {
                 let url = target_branch.get_user_url();
@@ -154,7 +155,7 @@ pub fn publish_one(
                 log::warn!(
                     "Unsupported forge ({}), will attempt to push to {}",
                     e,
-                    full_branch_url(target_branch.as_ref()),
+                    full_branch_url(&target_branch),
                 )
             }
             None
@@ -173,7 +174,7 @@ pub fn publish_one(
                 log::warn!(
                     "No login for forge ({}), will attempt to push to {}",
                     e,
-                    full_branch_url(target_branch.as_ref()),
+                    full_branch_url(&target_branch),
                 );
             }
             None
@@ -273,7 +274,7 @@ pub fn publish_one(
             (Some(resume_branch), Some(true), Some(existing_proposal))
         } else {
             match silver_platter::publish::find_existing_proposed(
-                target_branch.as_ref(),
+                &target_branch,
                 forge,
                 &request.derived_branch_name,
                 false,
@@ -417,10 +418,10 @@ pub fn publish(
     mode: Mode,
     role: &str,
     forge: Option<Forge>,
-    target_branch: Box<dyn Branch>,
-    source_branch: Box<dyn Branch>,
+    target_branch: breezyshim::branch::GenericBranch,
+    source_branch: breezyshim::branch::GenericBranch,
     derived_branch_name: &str,
-    resume_branch: Option<Box<dyn Branch>>,
+    resume_branch: Option<breezyshim::branch::GenericBranch>,
     log_id: &str,
     existing_proposal: Option<MergeProposal>,
     allow_create_proposal: bool,
@@ -494,11 +495,7 @@ pub fn publish(
     let target_lock = target_branch.lock_read();
     let source_lock = source_branch.lock_read();
 
-    match merge_conflicts(
-        target_branch.as_ref(),
-        source_branch.as_ref(),
-        stop_revision,
-    ) {
+    match merge_conflicts(&target_branch, &source_branch, stop_revision) {
         Ok(true) => {
             return Err(PublishError::Failure {
                 code: "merge-conflict".to_string(),
@@ -531,9 +528,9 @@ pub fn publish(
     };
 
     match publish_changes(
-        source_branch.as_ref(),
-        target_branch.as_ref(),
-        resume_branch.as_deref(),
+        &source_branch,
+        &target_branch,
+        resume_branch.as_ref(),
         mode.try_into().unwrap(),
         derived_branch_name,
         get_proposal_description,
@@ -550,6 +547,7 @@ pub fn publish(
         Some(true),
         stop_revision,
         auto_merge,
+        None, // work_in_progress
     ) {
         Err(SvpPublishError::Other(BrzError::DivergedBranches)) => Err(PublishError::Failure {
             description: "Upstream branch has diverged from local changes.".to_string(),
@@ -639,7 +637,7 @@ pub fn publish(
                     proposal: publish_result.proposal,
                     is_new: publish_result.is_new,
                     target_branch,
-                    forge: Some(publish_result.forge),
+                    forge: publish_result.forge,
                 },
                 derived_branch_name.to_string(),
             ))
@@ -656,7 +654,7 @@ pub struct PublishOneResult {
     mode: Mode,
     proposal: Option<MergeProposal>,
     is_new: Option<bool>,
-    target_branch: Box<dyn Branch>,
+    target_branch: breezyshim::branch::GenericBranch,
     forge: Option<Forge>,
 }
 
@@ -675,11 +673,9 @@ impl From<(PublishOneResult, String)> for crate::PublishOneResult {
                 .map(|proposal| proposal.get_web_url().unwrap()),
             is_new: publish_result.proposal.and(publish_result.is_new),
             target_branch_url: publish_result.target_branch.get_user_url(),
-            target_branch_web_url: publish_result.forge.map(|forge| {
-                forge
-                    .get_web_url(publish_result.target_branch.as_ref())
-                    .unwrap()
-            }),
+            target_branch_web_url: publish_result
+                .forge
+                .map(|forge| forge.get_web_url(&publish_result.target_branch).unwrap()),
             branch_name,
             mode: publish_result.mode,
         }

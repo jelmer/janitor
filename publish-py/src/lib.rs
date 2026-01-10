@@ -199,10 +199,7 @@ pub fn _publish(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_class::<FixedRateLimiter>()?;
     m.add_class::<NonRateLimiter>()?;
 
-    m.add("RateLimited", py.get_type_bound::<RateLimited>())?;
-    m.add(
-        "BucketRateLimited",
-        py.get_type_bound::<BucketRateLimited>(),
-    )?;
+    m.add("RateLimited", py.get_type::<RateLimited>())?;
+    m.add("BucketRateLimited", py.get_type::<BucketRateLimited>())?;
     Ok(())
 }

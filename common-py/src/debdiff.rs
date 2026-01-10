@@ -51,9 +51,7 @@ fn run_debdiff<'a>(
         .await
         .map_err(|e| DebdiffError::new_err((e.to_string(),)))?;
 
-        Ok(Python::with_gil(|py| {
-            PyBytes::new_bound(py, &r).to_object(py)
-        }))
+        Ok(Python::with_gil(|py| PyBytes::new(py, &r).unbind()))
     })
 }
 
@@ -64,6 +62,6 @@ pub(crate) fn init_module(py: Python, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(markdownify_debdiff, m)?)?;
     m.add_function(wrap_pyfunction!(htmlize_debdiff, m)?)?;
     m.add_function(wrap_pyfunction!(run_debdiff, m)?)?;
-    m.add("DebdiffError", py.get_type_bound::<DebdiffError>())?;
+    m.add("DebdiffError", py.get_type::<DebdiffError>())?;
     Ok(())
 }

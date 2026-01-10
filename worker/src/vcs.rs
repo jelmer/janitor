@@ -1,4 +1,6 @@
+use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
+use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
 use breezyshim::RevisionId;
 use janitor::vcs::VcsType;
@@ -7,7 +9,7 @@ use url::Url;
 
 /// Push a branch to a new location.
 pub fn push_branch(
-    source_branch: &dyn breezyshim::branch::Branch,
+    source_branch: &dyn breezyshim::branch::PyBranch,
     url: &Url,
     vcs_type: Option<VcsType>,
     overwrite: bool,
@@ -80,7 +82,7 @@ pub fn push_branch(
 /// * `Ok(())` if the branches were successfully imported.
 fn import_branches_bzr(
     repo_url: &Url,
-    local_branch: &dyn breezyshim::branch::Branch,
+    local_branch: &dyn breezyshim::branch::PyBranch,
     campaign: &str,
     log_id: &str,
     branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -146,7 +148,7 @@ fn import_branches_bzr(
             }
         };
         if update_current {
-            local_branch.push(target_branch.as_ref(), true, r.as_ref(), None)?;
+            local_branch.push(&*target_branch, true, r.as_ref(), None)?;
         } else {
             target_branch
                 .repository()
@@ -159,7 +161,7 @@ fn import_branches_bzr(
         for (name, revision) in tags.iter() {
             if let Some(revision) = revision {
                 // Only set tags on those branches where the revisions exist
-                if graph.is_ancestor(revision, &target_branch.last_revision()) {
+                if graph.is_ancestor(revision, &target_branch.last_revision())? {
                     target_branch
                         .tags()?
                         .set_tag(&format!("{}/{}", log_id, name), revision)?;
@@ -186,7 +188,7 @@ pub trait Vcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -201,7 +203,7 @@ impl Vcs for BzrVcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -222,7 +224,7 @@ impl Vcs for BzrVcs {
 
 fn import_branches_git(
     repo_url: &Url,
-    local_branch: &dyn breezyshim::branch::Branch,
+    local_branch: &dyn breezyshim::branch::PyBranch,
     campaign: &str,
     log_id: &str,
     branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -320,7 +322,7 @@ impl Vcs for GitVcs {
     fn import_branches(
         &self,
         repo_url: &Url,
-        local_branch: &dyn breezyshim::branch::Branch,
+        local_branch: &dyn breezyshim::branch::PyBranch,
         campaign: &str,
         log_id: &str,
         branches: &Vec<(String, String, Option<RevisionId>, Option<RevisionId>)>,
@@ -342,6 +344,7 @@ impl Vcs for GitVcs {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use breezyshim::tree::WorkingTree;
 
     #[test]
     fn test_push_branch() {
@@ -367,7 +370,7 @@ mod tests {
         .unwrap();
         target.create_repository(None).unwrap();
         super::push_branch(
-            source_tree.branch().as_ref(),
+            &source_tree.branch(),
             &url::Url::parse(&format!("{},branch=foo", target_url)).unwrap(),
             None,
             false,
@@ -409,7 +412,7 @@ mod tests {
         BzrVcs
             .import_branches(
                 &target_url,
-                source_tree.branch().as_ref(),
+                &source_tree.branch(),
                 "campaign",
                 "log_id",
                 &vec![(
@@ -466,7 +469,7 @@ mod tests {
         GitVcs
             .import_branches(
                 &target_url,
-                source_tree.branch().as_ref(),
+                &source_tree.branch(),
                 "campaign",
                 "log_id",
                 &vec![(

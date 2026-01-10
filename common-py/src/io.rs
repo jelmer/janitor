@@ -22,6 +22,6 @@ impl Readable {
             .read(&mut buf)
             .map_err(|e| PyRuntimeError::new_err(e))?;
         buf.truncate(n);
-        Ok(PyBytes::new_bound(py, &buf).into())
+        Ok(PyBytes::new(py, &buf).into())
     }
 }

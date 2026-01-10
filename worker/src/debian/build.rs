@@ -1,4 +1,7 @@
+use breezyshim::branch::Branch;
+use breezyshim::repository::Repository;
 use breezyshim::tree::{Tree, WorkingTree};
+use breezyshim::workingtree::PyWorkingTree;
 use janitor::api::worker::DebianBuildConfig;
 use ognibuild::debian::build::{BuildOnceError, BuildOnceResult};
 use ognibuild::debian::context::Phase;
@@ -22,7 +25,7 @@ impl std::fmt::Display for BuildFailure {
 impl std::error::Error for BuildFailure {}
 
 pub(crate) fn build(
-    local_tree: &WorkingTree,
+    local_tree: &breezyshim::workingtree::GenericWorkingTree,
     subpath: &std::path::Path,
     output_directory: &std::path::Path,
     committer: Option<&str>,
@@ -89,8 +92,15 @@ pub(crate) fn build(
 
         let result: Result<BuildOnceResult, IterateBuildError> =
             if let Some(suffix) = config.build_suffix.as_ref() {
+                let cloned_tree = breezyshim::tree::WorkingTree::clone(local_tree, subpath, None)
+                    .map_err(|e| BuildFailure {
+                    code: "clone-tree".to_string(),
+                    description: format!("Error cloning tree: {}", e),
+                    stage: vec!["build".to_string()],
+                    details: None,
+                })?;
                 let packaging_context = ognibuild::debian::context::DebianPackagingContext::new(
-                    local_tree.clone(),
+                    cloned_tree,
                     subpath,
                     committer.map(breezyshim::config::parse_username),
                     update_changelog == crate::debian::DebUpdateChangelog::Update,

@@ -659,6 +659,7 @@ pub fn role_branch_url(url: &url::Url, remote_branch_name: Option<&str>) -> url:
 /// # Returns
 /// `true` if the branches match, `false` otherwise
 pub fn branches_match(url_a: Option<&url::Url>, url_b: Option<&url::Url>) -> bool {
+    use breezyshim::branch::Branch;
     use silver_platter::vcs::{open_branch, BranchOpenError};
     if url_a == url_b {
         return true;

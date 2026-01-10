@@ -166,6 +166,14 @@ fn main() -> Result<(), i32> {
             )) => {
                 report_failure("session-process-error", &e.to_string());
             }
+            Err(ognibuild::debian::apt::Error::FileSearch(e)) => {
+                report_failure("file-search-error", &e.to_string());
+            }
+            Err(ognibuild::debian::apt::Error::Session(ognibuild::session::Error::ImageError(
+                e,
+            ))) => {
+                report_failure("session-image-error", &e.to_string());
+            }
         }
     } else {
         (None, None)

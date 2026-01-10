@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
-use breezyshim::repository::Repository;
+use breezyshim::repository::{GenericRepository, PyRepository, Repository};
 use breezyshim::RevisionId;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
@@ -67,7 +67,7 @@ impl std::str::FromStr for VcsType {
 
 pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<VcsType, BrzError> {
     let repository = branch.repository();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let object = repository.to_object(py);
         match object.getattr(py, "vcs") {
             Ok(vcs) => vcs
@@ -170,8 +170,8 @@ impl std::error::Error for BranchOpenFailure {}
 pub fn open_branch_ext(
     vcs_url: &Url,
     possible_transports: Option<&mut Vec<breezyshim::transport::Transport>>,
-    probers: Option<&[&dyn breezyshim::controldir::Prober]>,
-) -> Result<Box<dyn Branch>, BranchOpenFailure> {
+    probers: Option<&[&dyn breezyshim::controldir::PyProber]>,
+) -> Result<breezyshim::branch::GenericBranch, BranchOpenFailure> {
     match silver_platter::vcs::open_branch(vcs_url, possible_transports, probers, None) {
         Ok(branch) => Ok(branch),
         Err(e) => Err(convert_branch_exception(vcs_url, e)),
@@ -298,13 +298,13 @@ pub trait VcsManager: Send + Sync {
         &self,
         codebase: &str,
         branch_name: &str,
-    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError>;
+    ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError>;
 
     /// Get the URL for the branch.
     fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url;
 
     /// Get the repository for the codebase.
-    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError>;
+    fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError>;
 
     /// Get the URL for the repository.
     fn get_repository_url(&self, codebase: &str) -> Url;
@@ -349,7 +349,7 @@ impl VcsManager for LocalGitVcsManager {
         &self,
         codebase: &str,
         branch_name: &str,
-    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+    ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
         match silver_platter::vcs::open_branch(
             &url,
@@ -379,7 +379,7 @@ impl VcsManager for LocalGitVcsManager {
         breezyshim::urlutils::join_segment_parameters(&url, params)
     }
 
-    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+    fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError> {
         let url = self.get_repository_url(codebase);
         match breezyshim::repository::open(&url) {
             Ok(repo) => Ok(Some(repo)),
@@ -424,11 +424,13 @@ impl VcsManager for LocalGitVcsManager {
         } else {
             repo.lookup_bzr_revision_id(new_revid).unwrap().0
         };
+        let current_dir = repo.user_transport().local_abspath(Path::new(".")).unwrap();
+        drop(repo); // Drop repo before await
         let output = tokio::process::Command::new("git")
             .arg("diff")
             .arg(std::str::from_utf8(&old_sha).unwrap())
             .arg(std::str::from_utf8(&new_sha).unwrap())
-            .current_dir(repo.user_transport().local_abspath(Path::new(".")).unwrap())
+            .current_dir(current_dir)
             .output()
             .await
             .unwrap();
@@ -450,7 +452,9 @@ impl VcsManager for LocalGitVcsManager {
         let repo = self.get_repository(codebase).unwrap().unwrap();
         let old_sha = repo.lookup_bzr_revision_id(old_revid).unwrap().0;
         let new_sha = repo.lookup_bzr_revision_id(new_revid).unwrap().0;
-        Python::with_gil(|py| {
+
+        // Collect all the info we need from the Python objects before dropping repo
+        let commit_infos: Vec<(Vec<u8>, String)> = Python::attach(|py| {
             let mut ret = vec![];
             let git = repo.to_object(py).getattr(py, "_git").unwrap();
             let walker = git
@@ -460,19 +464,26 @@ impl VcsManager for LocalGitVcsManager {
             while let Ok(entry) = walker.call_method0(py, "__next__") {
                 let commit = entry.getattr(py, "commit").unwrap();
                 let commit_id: Vec<u8> = commit.getattr(py, "id").unwrap().extract(py).unwrap();
-                let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
                 let message = commit.getattr(py, "message").unwrap().to_string();
-                let link = None;
-                ret.push(RevisionInfo {
-                    commit_id: Some(commit_id),
-                    revision_id,
-                    message,
-                    link,
-                });
+                ret.push((commit_id, message));
             }
 
             ret
-        })
+        });
+
+        // Now convert commit_ids to revision_ids
+        let mut ret = vec![];
+        for (commit_id, message) in commit_infos {
+            let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
+            ret.push(RevisionInfo {
+                commit_id: Some(commit_id),
+                revision_id,
+                message,
+                link: None,
+            });
+        }
+
+        ret
     }
 }
 
@@ -497,7 +508,7 @@ impl VcsManager for LocalBzrVcsManager {
         &self,
         codebase: &str,
         branch_name: &str,
-    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+    ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
         match silver_platter::vcs::open_branch(
             &url,
@@ -524,7 +535,7 @@ impl VcsManager for LocalBzrVcsManager {
         url.join(codebase).unwrap().join(branch_name).unwrap()
     }
 
-    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+    fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError> {
         let url = self.get_repository_url(codebase);
         match breezyshim::repository::open(&url) {
             Ok(repo) => Ok(Some(repo)),
@@ -590,6 +601,7 @@ impl VcsManager for LocalBzrVcsManager {
         let graph = repo.get_graph();
         let revids = graph
             .iter_lefthand_ancestry(new_revid, Some(&[old_revid.clone()]))
+            .unwrap()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
         for (_revid, rev) in repo.iter_revisions(revids) {
@@ -707,7 +719,7 @@ impl VcsManager for RemoteGitVcsManager {
         &self,
         codebase: &str,
         branch_name: &str,
-    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+    ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
         open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
     }
@@ -716,7 +728,7 @@ impl VcsManager for RemoteGitVcsManager {
         self.base_url.join(codebase).unwrap()
     }
 
-    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+    fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError> {
         let url = self.get_repository_url(codebase);
         match breezyshim::repository::open(&url) {
             Ok(repo) => Ok(Some(repo)),
@@ -806,7 +818,7 @@ impl VcsManager for RemoteBzrVcsManager {
         &self,
         codebase: &str,
         branch_name: &str,
-    ) -> Result<Option<Box<dyn Branch>>, BranchOpenError> {
+    ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
         open_cached_branch(&url).map_err(|e| BranchOpenError::from_err(url, &e))
     }
@@ -815,7 +827,7 @@ impl VcsManager for RemoteBzrVcsManager {
         self.base_url.join(codebase).unwrap()
     }
 
-    fn get_repository(&self, codebase: &str) -> Result<Option<Repository>, BrzError> {
+    fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError> {
         let url = self.get_repository_url(codebase);
         match breezyshim::repository::open(&url) {
             Ok(repo) => Ok(Some(repo)),
@@ -829,7 +841,7 @@ impl VcsManager for RemoteBzrVcsManager {
     }
 }
 
-fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
+fn open_cached_branch(url: &Url) -> Result<Option<breezyshim::branch::GenericBranch>, BrzError> {
     fn convert_error(e: BrzError) -> Option<BrzError> {
         match e {
             BrzError::NotBranchError(..) => None,
@@ -846,8 +858,8 @@ fn open_cached_branch(url: &Url) -> Result<Option<Box<dyn Branch>>, BrzError> {
 
     // TODO(jelmer): Somehow pass in trace context headers
     match breezyshim::transport::get_transport(url, None) {
-        Ok(transport) => match breezyshim::branch::open_from_transport(&transport).map(Some) {
-            Ok(branch) => Ok(branch),
+        Ok(transport) => match breezyshim::branch::open_from_transport_as_generic(&transport) {
+            Ok(branch) => Ok(Some(branch)),
             Err(e) => match convert_error(e) {
                 Some(e) => Err(e),
                 None => Ok(None),
