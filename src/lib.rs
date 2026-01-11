@@ -15,6 +15,7 @@ pub mod schedule;
 pub mod schema;
 pub mod shared_config;
 pub mod state;
+pub mod tracing;
 pub mod vcs;
 
 /// The type of a run ID.
