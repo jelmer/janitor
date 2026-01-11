@@ -12,6 +12,7 @@ pub mod queue;
 pub mod reprocess_logs;
 pub mod schedule;
 pub mod schema;
+pub mod shared_config;
 pub mod state;
 pub mod vcs;
 
