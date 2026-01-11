@@ -15,7 +15,7 @@ mod vcs;
 fn get_branch_vcs_type(branch: Py<PyAny>) -> PyResult<String> {
     let branch = breezyshim::branch::GenericBranch::from(branch);
     janitor::vcs::get_branch_vcs_type(&branch)
-        .map_err(|e| PyValueError::new_err((format!("{}", e),)))
+        .map_err(|e| PyValueError::new_err((format!("{:?}", e),)))
         .map(|vcs| vcs.to_string())
 }
 
