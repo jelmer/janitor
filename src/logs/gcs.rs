@@ -21,7 +21,7 @@ pub struct GCSLogFileManager {
 }
 
 impl GCSLogFileManager {
-    pub async fn from_url(location: &url::Url) -> Result<Self, Error> {
+    pub async fn from_url(location: &url::Url, _creds: Option<()>) -> Result<Self, Error> {
         if location.scheme() != "gs" {
             return Err(Error::Other(format!(
                 "Invalid scheme: {}",
@@ -229,6 +229,45 @@ impl LogFileManager for GCSLogFileManager {
                     Err(Error::Other(e.to_string()))
                 }
             }
+        }
+    }
+
+    async fn delete_log(&self, codebase: &str, run_id: &str, name: &str) -> Result<(), Error> {
+        let bucket = self.bucket_path();
+        let object_name = self.get_object_name(codebase, run_id, name);
+
+        match self
+            .control
+            .delete_object()
+            .set_bucket(&bucket)
+            .set_object(&object_name)
+            .send()
+            .await
+        {
+            Ok(_) => {
+                log::info!("Successfully deleted log object: {}", object_name);
+                Ok(())
+            }
+            Err(err) => {
+                let error_msg = format!("Failed to delete object {}: {}", object_name, err);
+
+                if err.to_string().contains("404") || err.to_string().contains("Not Found") {
+                    Err(Error::NotFound)
+                } else if err.to_string().contains("403") || err.to_string().contains("Forbidden") {
+                    Err(Error::PermissionDenied)
+                } else {
+                    Err(Error::Other(error_msg))
+                }
+            }
+        }
+    }
+
+    async fn health_check(&self) -> Result<(), Error> {
+        // Try listing objects with a prefix that should return quickly
+        let bucket = self.bucket_path();
+        match self.control.list_objects().set_parent(&bucket).send().await {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Error::Other(format!("GCS health check failed: {}", e))),
         }
     }
 }
