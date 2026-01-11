@@ -13,6 +13,7 @@ pub mod schedule;
 pub mod schema;
 pub mod state;
 pub mod vcs;
+pub mod error;
 
 /// The type of a run ID.
 pub type RunId = String;
