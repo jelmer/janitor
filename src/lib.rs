@@ -11,11 +11,15 @@ pub mod prometheus;
 pub mod publish;
 pub mod queue;
 pub mod reprocess_logs;
+pub mod review;
 pub mod schedule;
 pub mod schema;
+pub mod security;
 pub mod shared_config;
 pub mod state;
+pub mod utils;
 pub mod vcs;
+pub mod worker_auth;
 
 /// The type of a run ID.
 pub type RunId = String;
