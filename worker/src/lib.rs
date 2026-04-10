@@ -1,6 +1,7 @@
 use breezyshim::branch::Branch;
 use breezyshim::controldir::ControlDirFormat;
 use breezyshim::error::Error as BrzError;
+use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
 use breezyshim::tree::{MutableTree, WorkingTree};
 use breezyshim::workingtree::PyWorkingTree;
@@ -199,34 +200,6 @@ pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_
             ("unsupported type",),
         ))
     }
-}
-
-pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> pyo3::Py<pyo3::PyAny>
-where
-    'b: 'a,
-{
-    use pyo3::prelude::*;
-    Python::with_gil(|py| match value {
-        serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, *b).as_any().clone().unbind(),
-        serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap())
-            .into_any()
-            .unbind(),
-        serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str())
-            .into_any()
-            .unbind(),
-        serde_json::Value::Array(a) => pyo3::types::PyList::new(py, a.iter().map(serde_json_to_py))
-            .unwrap()
-            .into_any()
-            .unbind(),
-        serde_json::Value::Object(o) => {
-            let ret = pyo3::types::PyDict::new(py);
-            for (k, v) in o.into_iter() {
-                ret.set_item(k, serde_json_to_py(v)).unwrap();
-            }
-            ret.into_any().unbind()
-        }
-    })
 }
 
 pub fn run_worker(

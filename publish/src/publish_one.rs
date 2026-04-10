@@ -6,7 +6,7 @@
 
 use crate::Mode;
 use crate::PublishError;
-use breezyshim::branch::Branch;
+use breezyshim::branch::{Branch, GenericBranch};
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::{determine_title, Forge, MergeProposal};
 use breezyshim::repository::Repository;
@@ -24,18 +24,10 @@ fn drop_env(args: &mut Vec<String>) {
     }
 }
 
-fn is_remote_git_branch(branch: &dyn breezyshim::branch::PyBranch) -> bool {
-    use pyo3::prelude::*;
-    Python::with_gil(|py| {
-        let b = branch.to_object(py);
-        b.getattr(py, "__class__")
-            .unwrap()
-            .getattr(py, "__name__")
-            .unwrap()
-            .extract::<String>(py)
-            .unwrap()
-            == "RemoteGitBranch"
-    })
+fn is_remote_git_branch(branch: &dyn Branch) -> bool {
+    let url = branch.get_user_url();
+    let vcs_type = branch.repository().vcs_type();
+    vcs_type == breezyshim::foreign::VcsType::Git && url.scheme() != "file"
 }
 
 /// Publish a single branch based on a request.
@@ -418,10 +410,10 @@ pub fn publish(
     mode: Mode,
     role: &str,
     forge: Option<Forge>,
-    target_branch: breezyshim::branch::GenericBranch,
-    source_branch: breezyshim::branch::GenericBranch,
+    target_branch: GenericBranch,
+    source_branch: GenericBranch,
     derived_branch_name: &str,
-    resume_branch: Option<breezyshim::branch::GenericBranch>,
+    resume_branch: Option<GenericBranch>,
     log_id: &str,
     existing_proposal: Option<MergeProposal>,
     allow_create_proposal: bool,
@@ -479,16 +471,13 @@ pub fn publish(
                     .unwrap(),
             )
         } else {
-            match determine_title(&get_proposal_description(
-                DescriptionFormat::Plain,
-                existing_proposal,
-            )) {
-                Ok(title) => Some(title),
-                Err(e) => {
-                    log::warn!("Failed to determine title: {}", e);
-                    None
-                }
-            }
+            Some(
+                determine_title(&get_proposal_description(
+                    DescriptionFormat::Plain,
+                    existing_proposal,
+                ))
+                .unwrap_or_default(),
+            )
         }
     };
 
@@ -654,7 +643,7 @@ pub struct PublishOneResult {
     mode: Mode,
     proposal: Option<MergeProposal>,
     is_new: Option<bool>,
-    target_branch: breezyshim::branch::GenericBranch,
+    target_branch: GenericBranch,
     forge: Option<Forge>,
 }
 

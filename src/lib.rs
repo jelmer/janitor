@@ -3,6 +3,7 @@ pub mod api;
 pub mod artifacts;
 pub mod config;
 pub mod debdiff;
+pub mod error;
 pub mod logging;
 pub mod logs;
 pub mod prometheus;
@@ -13,7 +14,6 @@ pub mod schedule;
 pub mod schema;
 pub mod state;
 pub mod vcs;
-pub mod error;
 
 /// The type of a run ID.
 pub type RunId = String;

@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use google_cloud_gax::paginator::ItemPaginator;
 use google_cloud_storage::client::{Storage, StorageControl};
 use std::collections::HashSet;
 use std::fs::File;
@@ -19,6 +18,10 @@ impl std::fmt::Debug for GCSArtifactManager {
             .field("bucket_name", &self.bucket_name)
             .finish()
     }
+}
+
+fn bucket_resource(bucket_name: &str) -> String {
+    format!("projects/_/buckets/{}", bucket_name)
 }
 
 impl GCSArtifactManager {
@@ -59,6 +62,14 @@ impl GCSArtifactManager {
     }
 }
 
+fn map_gcs_error(e: google_cloud_storage::Error) -> Error {
+    match e.http_status_code() {
+        Some(503) => Error::ServiceUnavailable,
+        Some(404) => Error::ArtifactsMissing,
+        _ => Error::Other(e.to_string()),
+    }
+}
+
 #[async_trait]
 impl ArtifactManager for GCSArtifactManager {
     async fn store_artifacts(
@@ -81,24 +92,21 @@ impl ArtifactManager for GCSArtifactManager {
             }
         };
 
+        let bucket = bucket_resource(&self.bucket_name);
         let tasks: Vec<_> = files_to_upload
             .into_iter()
             .map(|name| {
                 let file_path = local_path.join(&name);
-                let bucket = self.bucket_path();
+                let bucket = bucket.clone();
                 let storage = self.storage.clone();
-                let run_id = run_id.to_string();
-                let name = name.clone();
+                let object_name = format!("{}/{}", run_id, name);
                 tokio::spawn(async move {
-                    let file = tokio::fs::File::open(&file_path).await?;
-                    let object_name = format!("{}/{}", run_id, name);
-
+                    let data = tokio::fs::read(&file_path).await?;
                     storage
-                        .write_object(&bucket, &object_name, file)
-                        .send_unbuffered()
+                        .write_object(&bucket, &object_name, bytes::Bytes::from(data))
+                        .send_buffered()
                         .await
-                        .map_err(|e| Error::Other(e.to_string()))?;
-
+                        .map_err(map_gcs_error)?;
                     Ok::<(), Error>(())
                 })
             })
@@ -114,24 +122,25 @@ impl ArtifactManager for GCSArtifactManager {
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error> {
         let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
+        let bucket = bucket_resource(&self.bucket_name);
 
-        let mut stream = self
+        let response = self
             .control
             .list_objects()
-            .set_parent(bucket.clone())
+            .set_parent(&bucket)
             .set_prefix(&prefix)
-            .by_item();
+            .send()
+            .await
+            .map_err(map_gcs_error)?;
 
-        while let Some(result) = stream.next().await {
-            let object = result.map_err(|e| Error::Other(e.to_string()))?;
-
+        for object in response.objects {
             self.control
                 .delete_object()
-                .set_bucket(bucket.clone())
+                .set_bucket(&bucket)
                 .set_object(&object.name)
                 .send()
                 .await
-                .map_err(|e| Error::Other(e.to_string()))?;
+                .map_err(map_gcs_error)?;
         }
 
         Ok(())
@@ -144,17 +153,17 @@ impl ArtifactManager for GCSArtifactManager {
     ) -> Result<Box<dyn std::io::Read + Send + Sync>, Error> {
         let bucket = self.bucket_path();
         let object_name = format!("{}/{}", run_id, filename);
+        let bucket = bucket_resource(&self.bucket_name);
 
-        let mut response = self
+        let mut resp = self
             .storage
             .read_object(&bucket, &object_name)
             .send()
             .await
-            .map_err(|e| Error::Other(e.to_string()))?;
+            .map_err(map_gcs_error)?;
 
         let mut contents = Vec::new();
-        while let Some(chunk) = response.next().await {
-            let chunk = chunk.map_err(|e| Error::Other(e.to_string()))?;
+        while let Some(chunk) = resp.next().await.transpose().map_err(map_gcs_error)? {
             contents.extend_from_slice(&chunk);
         }
 
@@ -181,20 +190,20 @@ impl ArtifactManager for GCSArtifactManager {
     ) -> Result<(), Error> {
         let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
+        let bucket = bucket_resource(&self.bucket_name);
 
-        let mut stream = self
+        let response = self
             .control
             .list_objects()
-            .set_parent(bucket)
+            .set_parent(&bucket)
             .set_prefix(&prefix)
-            .by_item();
+            .send()
+            .await
+            .map_err(map_gcs_error)?;
 
-        while let Some(result) = stream.next().await {
-            let object = result.map_err(|e| Error::Other(e.to_string()))?;
-            let name = &object.name;
-            let file_name = name.trim_start_matches(&prefix);
-
-            if filter_fn.is_none_or(|f| f(file_name)) {
+        for object in response.objects {
+            let file_name = object.name.trim_start_matches(&prefix);
+            if filter_fn.map_or(true, |f| f(file_name)) {
                 let mut content = self.get_artifact(run_id, file_name).await?;
                 let mut file = File::create(local_path.join(file_name))?;
                 std::io::copy(&mut content, &mut file)?;
@@ -206,16 +215,20 @@ impl ArtifactManager for GCSArtifactManager {
 
     async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send> {
         let mut ids = HashSet::new();
-        let bucket = self.bucket_path();
+        let bucket = bucket_resource(&self.bucket_name);
 
-        let mut stream = self.control.list_objects().set_parent(bucket).by_item();
+        let response = self
+            .control
+            .list_objects()
+            .set_parent(&bucket)
+            .send()
+            .await
+            .map_err(map_gcs_error)
+            .unwrap();
 
-        while let Some(result) = stream.next().await {
-            if let Ok(object) = result {
-                if let Some(id) = object.name.split('/').next() {
-                    ids.insert(id.to_string());
-                }
-            }
+        for object in response.objects {
+            let id = object.name.split('/').next().unwrap().to_string();
+            ids.insert(id);
         }
 
         Box::new(ids.into_iter())

@@ -3,7 +3,6 @@ use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use breezyshim::repository::{GenericRepository, PyRepository, Repository};
 use breezyshim::RevisionId;
-use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use silver_platter::vcs::BranchOpenError;
@@ -67,23 +66,11 @@ impl std::str::FromStr for VcsType {
 
 pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<VcsType, BrzError> {
     let repository = branch.repository();
-    Python::attach(|py| {
-        let object = repository.to_object(py);
-        match object.getattr(py, "vcs") {
-            Ok(vcs) => vcs
-                .getattr(py, "abbreviation")
-                .unwrap()
-                .extract::<String>(py),
-            Err(e) if e.is_instance_of::<PyAttributeError>(py) => Ok("bzr".to_string()),
-            Err(e) => Err(e),
-        }
-    })
-    .map_err(BrzError::from)
-    .map(|vcs| match vcs.as_str() {
-        "bzr" => VcsType::Bzr,
-        "git" => VcsType::Git,
-        _ => panic!("Unknown VCS type: {}", vcs),
-    })
+    match repository.vcs_type() {
+        breezyshim::foreign::VcsType::Git => Ok(VcsType::Git),
+        breezyshim::foreign::VcsType::Bazaar => Ok(VcsType::Bzr),
+        other => panic!("Unknown VCS type: {:?}", other),
+    }
 }
 
 pub fn is_alioth_url(url: &Url) -> bool {
@@ -351,11 +338,12 @@ impl VcsManager for LocalGitVcsManager {
         branch_name: &str,
     ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
+        let probers = silver_platter::probers::select_probers(Some("git"));
         match silver_platter::vcs::open_branch(
             &url,
             None,
             Some(
-                silver_platter::probers::select_probers(Some("git"))
+                probers
                     .iter()
                     .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
@@ -363,7 +351,7 @@ impl VcsManager for LocalGitVcsManager {
             ),
             None,
         ) {
-            Ok(branch) => Ok(Some(branch)),
+            Ok(branch) => Ok(Some(Box::new(branch))),
             Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
                 Ok(None)
             }
@@ -456,13 +444,14 @@ impl VcsManager for LocalGitVcsManager {
         // Collect all the info we need from the Python objects before dropping repo
         let commit_infos: Vec<(Vec<u8>, String)> = Python::attach(|py| {
             let mut ret = vec![];
-            let git = repo.to_object(py).getattr(py, "_git").unwrap();
+            let repo_obj = repo.to_object(py);
+            let git = repo_obj.getattr(py, "_git").unwrap();
             let walker = git
                 .call_method1(py, "get_walker", (new_sha, old_sha))
                 .unwrap();
 
             while let Ok(entry) = walker.call_method0(py, "__next__") {
-                let commit = entry.getattr(py, "commit").unwrap();
+                let commit: Py<PyAny> = entry.getattr(py, "commit").unwrap();
                 let commit_id: Vec<u8> = commit.getattr(py, "id").unwrap().extract(py).unwrap();
                 let message = commit.getattr(py, "message").unwrap().to_string();
                 ret.push((commit_id, message));
@@ -510,11 +499,12 @@ impl VcsManager for LocalBzrVcsManager {
         branch_name: &str,
     ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
+        let probers = silver_platter::probers::select_probers(Some("bzr"));
         match silver_platter::vcs::open_branch(
             &url,
             None,
             Some(
-                silver_platter::probers::select_probers(Some("bzr"))
+                probers
                     .iter()
                     .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
@@ -522,7 +512,7 @@ impl VcsManager for LocalBzrVcsManager {
             ),
             None,
         ) {
-            Ok(branch) => Ok(Some(branch)),
+            Ok(branch) => Ok(Some(Box::new(branch))),
             Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
                 Ok(None)
             }

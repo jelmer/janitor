@@ -161,7 +161,10 @@ fn import_branches_bzr(
         for (name, revision) in tags.iter() {
             if let Some(revision) = revision {
                 // Only set tags on those branches where the revisions exist
-                if graph.is_ancestor(revision, &target_branch.last_revision())? {
+                if graph
+                    .is_ancestor(revision, &target_branch.last_revision())
+                    .unwrap_or(false)
+                {
                     target_branch
                         .tags()?
                         .set_tag(&format!("{}/{}", log_id, name), revision)?;

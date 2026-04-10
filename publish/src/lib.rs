@@ -4,6 +4,7 @@
 
 #![deny(missing_docs)]
 
+use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::Forge;
 use breezyshim::RevisionId;

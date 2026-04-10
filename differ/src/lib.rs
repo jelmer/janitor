@@ -32,6 +32,8 @@ pub fn find_binaries(path: &Path) -> impl Iterator<Item = (OsString, PathBuf)> {
 ///
 /// # Returns
 /// `true` if the file is a binary package, `false` otherwise
-pub fn is_binary(name: &str) -> bool {
-    name.ends_with(".deb") || name.ends_with(".udeb")
+pub fn is_binary(name: &OsStr) -> bool {
+    name.to_str().map_or(false, |name| {
+        name.ends_with(".deb") || name.ends_with(".udeb")
+    })
 }

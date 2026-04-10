@@ -200,7 +200,7 @@ impl JanitorError {
     /// Create a Redis error from a string message
     pub fn redis_msg(msg: impl Into<String>) -> Self {
         Self::Redis(redis::RedisError::from((
-            redis::ErrorKind::IoError,
+            redis::ErrorKind::Io,
             "Redis operation failed",
             msg.into(),
         )))
@@ -290,7 +290,7 @@ impl JanitorError {
             Self::RateLimit(_) => true,
             Self::Timeout(_) => true,
             Self::ExternalService { .. } => true, // Often network-related
-            Self::Process { .. } => true, // Process failures might be transient
+            Self::Process { .. } => true,         // Process failures might be transient
             _ => false,
         }
     }
@@ -353,11 +353,15 @@ impl JanitorError {
             Self::Config(_) => "CONFIG_ERROR".to_string(),
             Self::Auth(_) => "AUTH_ERROR".to_string(),
             Self::Validation(_) => "VALIDATION_ERROR".to_string(),
-            Self::ExternalService { service, .. } => format!("EXTERNAL_{}_ERROR", service.to_uppercase()),
+            Self::ExternalService { service, .. } => {
+                format!("EXTERNAL_{}_ERROR", service.to_uppercase())
+            }
             Self::RateLimit(_) => "RATE_LIMIT_EXCEEDED".to_string(),
             Self::Timeout(_) => "TIMEOUT".to_string(),
             Self::NotFound { resource, .. } => format!("{}_NOT_FOUND", resource.to_uppercase()),
-            Self::AlreadyExists { resource, .. } => format!("{}_ALREADY_EXISTS", resource.to_uppercase()),
+            Self::AlreadyExists { resource, .. } => {
+                format!("{}_ALREADY_EXISTS", resource.to_uppercase())
+            }
             Self::PermissionDenied(_) => "PERMISSION_DENIED".to_string(),
             Self::Internal(_) => "INTERNAL_ERROR".to_string(),
             Self::Redis(_) => "REDIS_ERROR".to_string(),
@@ -449,10 +453,10 @@ pub struct StandardErrorResponse {
 /// Detailed error information
 #[derive(serde::Serialize)]
 pub struct ErrorInfo {
-    pub r#type: String,           // Error category (e.g., "not_found", "validation")
-    pub code: String,             // Specific error code (e.g., "RUN_NOT_FOUND")
-    pub message: String,          // Human-readable message
-    pub transient: bool,          // Whether retry makes sense
+    pub r#type: String,  // Error category (e.g., "not_found", "validation")
+    pub code: String,    // Specific error code (e.g., "RUN_NOT_FOUND")
+    pub message: String, // Human-readable message
+    pub transient: bool, // Whether retry makes sense
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<serde_json::Value>, // Service-specific details
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -475,7 +479,7 @@ impl StandardErrorResponse {
             error: error_info,
             request_id: None, // Will be set by middleware
             timestamp: chrono::Utc::now().to_rfc3339(),
-            service: None,    // Will be set by service-specific helper
+            service: None, // Will be set by service-specific helper
         }
     }
 
@@ -492,12 +496,7 @@ impl StandardErrorResponse {
     }
 
     /// Create a standardized error response from scratch
-    pub fn new(
-        error_type: &str,
-        code: &str,
-        message: &str,
-        transient: bool,
-    ) -> Self {
+    pub fn new(error_type: &str, code: &str, message: &str, transient: bool) -> Self {
         let error_info = ErrorInfo {
             r#type: error_type.to_string(),
             code: code.to_string(),
@@ -528,23 +527,10 @@ impl StandardErrorResponse {
     }
 }
 
-
 /// Convert common error types to JanitorError
 impl From<url::ParseError> for JanitorError {
     fn from(e: url::ParseError) -> Self {
         Self::Validation(format!("Invalid URL: {}", e))
-    }
-}
-
-impl From<crate::shared_config::ConfigError> for JanitorError {
-    fn from(err: crate::shared_config::ConfigError) -> Self {
-        Self::Config(err.to_string())
-    }
-}
-
-impl From<crate::shared_config::ValidationError> for JanitorError {
-    fn from(err: crate::shared_config::ValidationError) -> Self {
-        Self::Config(err.to_string())
     }
 }
 
@@ -600,10 +586,10 @@ pub fn internal_error(msg: impl Into<String>) -> JanitorError {
 pub trait OptionExt<T> {
     /// Convert None to a not found error
     fn ok_or_not_found(self, resource: &str, id: &str) -> Result<T>;
-    
+
     /// Convert None to an internal error
     fn ok_or_internal(self, msg: &str) -> Result<T>;
-    
+
     /// Convert None to a validation error
     fn ok_or_validation(self, msg: &str) -> Result<T>;
 }
@@ -612,11 +598,11 @@ impl<T> OptionExt<T> for Option<T> {
     fn ok_or_not_found(self, resource: &str, id: &str) -> Result<T> {
         self.ok_or_else(|| JanitorError::not_found(resource, id))
     }
-    
+
     fn ok_or_internal(self, msg: &str) -> Result<T> {
         self.ok_or_else(|| JanitorError::internal(msg))
     }
-    
+
     fn ok_or_validation(self, msg: &str) -> Result<T> {
         self.ok_or_else(|| JanitorError::validation(msg))
     }
@@ -626,10 +612,10 @@ impl<T> OptionExt<T> for Option<T> {
 pub trait ResultExt<T> {
     /// Add not found context
     fn not_found_context(self, resource: &str, id: &str) -> Result<T>;
-    
+
     /// Add validation context
     fn validation_context(self, msg: &str) -> Result<T>;
-    
+
     /// Add internal context
     fn internal_context(self, msg: &str) -> Result<T>;
 }
@@ -641,11 +627,11 @@ where
     fn not_found_context(self, resource: &str, id: &str) -> Result<T> {
         self.map_err(|_| JanitorError::not_found(resource, id))
     }
-    
+
     fn validation_context(self, msg: &str) -> Result<T> {
         self.map_err(|_| JanitorError::validation(msg))
     }
-    
+
     fn internal_context(self, msg: &str) -> Result<T> {
         self.map_err(|e| {
             let base_error = e.into();
@@ -704,7 +690,7 @@ pub mod responses {
 pub trait IntoStandardResponse<T> {
     /// Convert result to a standardized HTTP response, mapping errors to JanitorError
     fn into_response(self) -> impl IntoResponse;
-    
+
     /// Convert result to a standardized HTTP response with custom error mapping
     fn into_response_with<F>(self, error_mapper: F) -> impl IntoResponse
     where
@@ -722,7 +708,7 @@ where
             Err(error) => error.into().into_response(),
         }
     }
-    
+
     fn into_response_with<F>(self, error_mapper: F) -> impl IntoResponse
     where
         F: FnOnce() -> JanitorError,
@@ -741,7 +727,7 @@ pub type ArchiveResult<T> = Result<T>;
 pub type GitStoreError = JanitorError;
 pub type GitStoreResult<T> = Result<T>;
 
-pub type UploadError = JanitorError; 
+pub type UploadError = JanitorError;
 pub type UploadResult<T> = Result<T>;
 
 pub type WorkerError = JanitorError;
@@ -857,9 +843,18 @@ mod tests {
 
     #[test]
     fn test_error_codes() {
-        assert_eq!(JanitorError::not_found("run", "123").error_code(), "RUN_NOT_FOUND");
-        assert_eq!(JanitorError::validation("test").error_code(), "VALIDATION_ERROR");
-        assert_eq!(JanitorError::external_service("git", "failed").error_code(), "EXTERNAL_GIT_ERROR");
+        assert_eq!(
+            JanitorError::not_found("run", "123").error_code(),
+            "RUN_NOT_FOUND"
+        );
+        assert_eq!(
+            JanitorError::validation("test").error_code(),
+            "VALIDATION_ERROR"
+        );
+        assert_eq!(
+            JanitorError::external_service("git", "failed").error_code(),
+            "EXTERNAL_GIT_ERROR"
+        );
     }
 
     #[test]
@@ -872,14 +867,17 @@ mod tests {
         let process_err = JanitorError::process("cargo build", "compilation failed");
         let process_details = process_err.error_details().unwrap();
         assert_eq!(process_details["command"], "cargo build");
-        assert_eq!(process_details["failure_reason"], "process execution failed");
+        assert_eq!(
+            process_details["failure_reason"],
+            "process execution failed"
+        );
     }
 
     #[test]
     fn test_standard_error_response() {
         let err = JanitorError::not_found("run", "test-123");
         let response = StandardErrorResponse::from_janitor_error(err);
-        
+
         assert_eq!(response.error.r#type, "not_found");
         assert_eq!(response.error.code, "RUN_NOT_FOUND");
         assert_eq!(response.error.message, "Not found: run 'test-123'");
@@ -891,23 +889,27 @@ mod tests {
 
     #[test]
     fn test_standard_error_response_with_metadata() {
-        let response = StandardErrorResponse::new("validation", "INVALID_INPUT", "Input is required", false)
-            .with_request_id("req-123".to_string())
-            .with_service("runner".to_string())
-            .with_details(serde_json::json!({"field": "name", "constraint": "required"}))
-            .with_help_url("https://docs.example.com/validation".to_string());
+        let response =
+            StandardErrorResponse::new("validation", "INVALID_INPUT", "Input is required", false)
+                .with_request_id("req-123".to_string())
+                .with_service("runner".to_string())
+                .with_details(serde_json::json!({"field": "name", "constraint": "required"}))
+                .with_help_url("https://docs.example.com/validation".to_string());
 
         assert_eq!(response.request_id, Some("req-123".to_string()));
         assert_eq!(response.service, Some("runner".to_string()));
         assert_eq!(response.error.details.unwrap()["field"], "name");
-        assert_eq!(response.error.help_url, Some("https://docs.example.com/validation".to_string()));
+        assert_eq!(
+            response.error.help_url,
+            Some("https://docs.example.com/validation".to_string())
+        );
     }
 
     #[test]
     fn test_convenience_responses() {
         // Test that convenience functions return the right error types
         use crate::error::responses::*;
-        
+
         // These should compile and return IntoResponse types
         let _not_found_resp = not_found("run", "123");
         let _validation_resp = validation_error("invalid input");

@@ -1,6 +1,6 @@
 use crate::AppState;
-use askama_axum::IntoResponse;
-use askama_axum::Template;
+use askama::Template;
+use axum::response::IntoResponse;
 use axum::{
     extract::Path, extract::State, http::HeaderMap, http::StatusCode, response::Json,
     response::Response, routing::get, Router,
@@ -51,12 +51,15 @@ async fn index(State(state): State<Arc<RwLock<AppState>>>) -> Response {
             None
         };
 
-    IndexTemplate {
+    let template = IndexTemplate {
         assignment: state.assignment.as_ref(),
         lognames,
         metadata: state.metadata.as_ref(),
+    };
+    match template.render() {
+        Ok(html) => axum::response::Html(html).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
-    .into_response()
 }
 
 async fn health() -> String {
@@ -101,7 +104,10 @@ async fn get_logs(State(state): State<Arc<RwLock<AppState>>>, headers: HeaderMap
         .map(|x| x.to_str().unwrap())
     {
         Some("application/json") => Json(names).into_response(),
-        _ => LogIndexTemplate { names }.into_response(),
+        _ => match (LogIndexTemplate { names }).render() {
+            Ok(html) => axum::response::Html(html).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        },
     }
 }
 
@@ -139,7 +145,10 @@ async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: Head
         .map(|x| x.to_str().unwrap())
     {
         Some("application/json") => Json(names).into_response(),
-        _ => ArtifactIndexTemplate { names }.into_response(),
+        _ => match (ArtifactIndexTemplate { names }).render() {
+            Ok(html) => axum::response::Html(html).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        },
     }
 }
 
