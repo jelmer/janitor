@@ -169,39 +169,6 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
-pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_json::Value> {
-    use pyo3::prelude::*;
-    if obj.is_none() {
-        Ok(serde_json::Value::Null)
-    } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
-        Ok(serde_json::Value::Bool(b.is_true()))
-    } else if let Ok(f) = obj.downcast::<pyo3::types::PyFloat>() {
-        Ok(serde_json::Value::Number(
-            serde_json::Number::from_f64(f.value()).unwrap(),
-        ))
-    } else if let Ok(s) = obj.downcast::<pyo3::types::PyString>() {
-        Ok(serde_json::Value::String(s.to_string_lossy().to_string()))
-    } else if let Ok(l) = obj.downcast::<pyo3::types::PyList>() {
-        Ok(serde_json::Value::Array(
-            l.iter()
-                .map(|x| py_to_serde_json(&x))
-                .collect::<PyResult<Vec<_>>>()?,
-        ))
-    } else if let Ok(d) = obj.downcast::<pyo3::types::PyDict>() {
-        let mut ret = serde_json::Map::new();
-        for (k, v) in d.iter() {
-            let k = k.extract::<String>()?;
-            let v = py_to_serde_json(&v)?;
-            ret.insert(k, v);
-        }
-        Ok(serde_json::Value::Object(ret))
-    } else {
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            ("unsupported type",),
-        ))
-    }
-}
-
 pub fn run_worker(
     codebase: &str,
     campaign: &str,
