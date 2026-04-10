@@ -82,4 +82,147 @@ mod tests {
         );
         assert!(config.get_distribution("test2").is_none());
     }
+
+    #[test]
+    fn test_distribution_fields() {
+        let config = read_string(
+            r#"
+            distribution {
+                name: "unstable"
+                archive_mirror_uri: "http://deb.debian.org/debian"
+                chroot: "unstable-amd64-sbuild"
+                lintian_profile: "debian"
+                build_command: "sbuild -Asv"
+                vendor: "debian"
+            }
+            "#,
+        )
+        .unwrap();
+        let dist = config.get_distribution("unstable").unwrap();
+        assert_eq!(
+            dist.archive_mirror_uri,
+            Some("http://deb.debian.org/debian".to_string())
+        );
+        assert_eq!(dist.chroot, Some("unstable-amd64-sbuild".to_string()));
+        assert_eq!(dist.lintian_profile, Some("debian".to_string()));
+        assert_eq!(dist.build_command, Some("sbuild -Asv".to_string()));
+        assert_eq!(dist.vendor, Some("debian".to_string()));
+    }
+
+    #[test]
+    fn test_get_campaign() {
+        let config = read_string(
+            r#"
+            campaign {
+                name: "lintian-fixes"
+                command: "lintian-brush"
+                branch_name: "lintian-fixes"
+                debian_build {
+                    build_distribution: "lintian-fixes"
+                    build_suffix: "jan+lint"
+                    base_distribution: "unstable"
+                }
+            }
+            "#,
+        )
+        .unwrap();
+        let campaign = config.get_campaign("lintian-fixes").unwrap();
+        assert_eq!(campaign.name, Some("lintian-fixes".to_string()));
+        assert_eq!(campaign.command, Some("lintian-brush".to_string()));
+        assert_eq!(campaign.branch_name, Some("lintian-fixes".to_string()));
+        assert!(campaign.has_debian_build());
+        let debian_build = campaign.debian_build();
+        assert_eq!(debian_build.build_distribution(), "lintian-fixes");
+        assert_eq!(debian_build.build_suffix(), "jan+lint");
+        assert_eq!(debian_build.base_distribution(), "unstable");
+    }
+
+    #[test]
+    fn test_get_campaign_not_found() {
+        let config = read_string(r#"campaign { name: "foo" }"#).unwrap();
+        assert!(config.get_campaign("bar").is_none());
+    }
+
+    #[test]
+    fn test_find_campaign_by_branch_name() {
+        let config = read_string(
+            r#"
+            campaign { name: "lintian-fixes" branch_name: "lintian-fixes" }
+            campaign { name: "fresh-releases" branch_name: "new-upstream" }
+            "#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.find_campaign_by_branch_name("lintian-fixes"),
+            Some(("lintian-fixes", "main"))
+        );
+        assert_eq!(
+            config.find_campaign_by_branch_name("new-upstream"),
+            Some(("fresh-releases", "main"))
+        );
+        assert_eq!(config.find_campaign_by_branch_name("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_campaign_with_bugtracker() {
+        let config = read_string(
+            r#"
+            campaign {
+                name: "lintian-fixes"
+                bugtracker {
+                    kind: debian
+                    url: "https://bugs.debian.org/lintian-brush"
+                    name: "lintian-brush"
+                }
+            }
+            "#,
+        )
+        .unwrap();
+        let campaign = config.get_campaign("lintian-fixes").unwrap();
+        assert_eq!(campaign.bugtracker.len(), 1);
+        let bt = &campaign.bugtracker[0];
+        assert_eq!(
+            bt.url,
+            Some("https://bugs.debian.org/lintian-brush".to_string())
+        );
+        assert_eq!(bt.name, Some("lintian-brush".to_string()));
+    }
+
+    #[test]
+    fn test_read_string_invalid() {
+        assert!(read_string("this is not valid protobuf {{{").is_err());
+    }
+
+    #[test]
+    fn test_example_config_campaigns() {
+        let config = read_file(std::path::Path::new("janitor.conf.example")).unwrap();
+
+        // Verify all expected campaigns exist
+        for name in &[
+            "lintian-fixes",
+            "unchanged",
+            "fresh-releases",
+            "fresh-snapshots",
+            "multiarch-fixes",
+            "uncommitted",
+            "debianize",
+            "upstream-unchanged",
+        ] {
+            assert!(
+                config.get_campaign(name).is_some(),
+                "Campaign '{}' not found",
+                name
+            );
+        }
+
+        // Verify find_campaign_by_branch_name works with real config
+        assert_eq!(
+            config.find_campaign_by_branch_name("lintian-fixes"),
+            Some(("lintian-fixes", "main"))
+        );
+        assert_eq!(
+            config.find_campaign_by_branch_name("new-upstream"),
+            Some(("fresh-releases", "main"))
+        );
+    }
 }

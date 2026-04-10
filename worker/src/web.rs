@@ -270,10 +270,10 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
         .route("/health", get(health))
         .route("/assignment", get(assignment))
         .route("/logs", get(get_logs))
-        .route("/logs/:filename", get(get_log_file))
+        .route("/logs/{filename}", get(get_log_file))
         .route("/log-id", get(get_log_id))
         .route("/artifacts", get(get_artifacts))
-        .route("/artifacts/:filename", get(get_artifact_file))
+        .route("/artifacts/{filename}", get(get_artifact_file))
         .with_state(state.clone().clone())
 }
 

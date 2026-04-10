@@ -814,13 +814,54 @@ mod tests {
 
     #[test]
     fn test_transient_errors() {
-        assert!(JanitorError::RateLimit("test".to_string()).is_transient());
-        assert!(JanitorError::Timeout("test".to_string()).is_transient());
-        assert!(!JanitorError::NotFound {
-            resource: "test".to_string(),
-            id: "123".to_string()
-        }
-        .is_transient());
+        assert_eq!(
+            JanitorError::RateLimit("test".to_string()).is_transient(),
+            true
+        );
+        assert_eq!(
+            JanitorError::Timeout("test".to_string()).is_transient(),
+            true
+        );
+        assert_eq!(
+            JanitorError::ExternalService {
+                service: "git".to_string(),
+                message: "fail".to_string()
+            }
+            .is_transient(),
+            true
+        );
+        assert_eq!(
+            JanitorError::Process {
+                command: "cmd".to_string(),
+                reason: "fail".to_string()
+            }
+            .is_transient(),
+            true
+        );
+    }
+
+    #[test]
+    fn test_non_transient_errors() {
+        assert_eq!(
+            JanitorError::NotFound {
+                resource: "test".to_string(),
+                id: "123".to_string()
+            }
+            .is_transient(),
+            false
+        );
+        assert_eq!(
+            JanitorError::Validation("bad input".to_string()).is_transient(),
+            false
+        );
+        assert_eq!(
+            JanitorError::Auth("denied".to_string()).is_transient(),
+            false
+        );
+        assert_eq!(
+            JanitorError::Config("bad".to_string()).is_transient(),
+            false
+        );
     }
 
     #[test]
@@ -828,6 +869,21 @@ mod tests {
         assert_eq!(JanitorError::not_found("test", "123").http_status(), 404);
         assert_eq!(JanitorError::validation("test").http_status(), 400);
         assert_eq!(JanitorError::permission_denied("test").http_status(), 403);
+        assert_eq!(JanitorError::auth("denied").http_status(), 401);
+        assert_eq!(
+            JanitorError::already_exists("test", "123").http_status(),
+            409
+        );
+        assert_eq!(
+            JanitorError::RateLimit("slow down".to_string()).http_status(),
+            429
+        );
+        assert_eq!(
+            JanitorError::Timeout("too slow".to_string()).http_status(),
+            408
+        );
+        assert_eq!(JanitorError::internal("oops").http_status(), 500);
+        assert_eq!(JanitorError::Config("bad".to_string()).http_status(), 500);
     }
 
     #[test]
@@ -838,7 +894,10 @@ mod tests {
         ));
 
         let err = result.context("Failed to read config").unwrap_err();
-        assert!(err.to_string().contains("Failed to read config"));
+        assert_eq!(
+            err.to_string(),
+            "Internal error: Failed to read config: I/O error: file not found"
+        );
     }
 
     #[test]
@@ -854,6 +913,25 @@ mod tests {
         assert_eq!(
             JanitorError::external_service("git", "failed").error_code(),
             "EXTERNAL_GIT_ERROR"
+        );
+    }
+
+    #[test]
+    fn test_error_type() {
+        assert_eq!(
+            JanitorError::not_found("run", "123").error_type(),
+            "not_found"
+        );
+        assert_eq!(JanitorError::validation("test").error_type(), "validation");
+        assert_eq!(JanitorError::auth("denied").error_type(), "authentication");
+        assert_eq!(JanitorError::internal("oops").error_type(), "internal");
+        assert_eq!(
+            JanitorError::RateLimit("slow".to_string()).error_type(),
+            "rate_limit"
+        );
+        assert_eq!(
+            JanitorError::Archive("bad".to_string()).error_type(),
+            "archive"
         );
     }
 
@@ -874,6 +952,102 @@ mod tests {
     }
 
     #[test]
+    fn test_error_details_none() {
+        assert_eq!(JanitorError::validation("bad").error_details(), None);
+        assert_eq!(JanitorError::internal("oops").error_details(), None);
+        assert_eq!(
+            JanitorError::Config("bad".to_string()).error_details(),
+            None
+        );
+    }
+
+    #[test]
+    fn test_help_urls() {
+        assert_eq!(
+            JanitorError::Config("bad".to_string()).help_url(),
+            Some("https://docs.janitor.io/config".to_string())
+        );
+        assert_eq!(
+            JanitorError::Auth("denied".to_string()).help_url(),
+            Some("https://docs.janitor.io/auth".to_string())
+        );
+        assert_eq!(
+            JanitorError::Validation("bad".to_string()).help_url(),
+            Some("https://docs.janitor.io/api".to_string())
+        );
+        assert_eq!(JanitorError::internal("oops").help_url(), None);
+    }
+
+    #[test]
+    fn test_display_messages() {
+        assert_eq!(
+            JanitorError::not_found("run", "abc").to_string(),
+            "Not found: run 'abc'"
+        );
+        assert_eq!(
+            JanitorError::already_exists("user", "john").to_string(),
+            "Already exists: user 'john'"
+        );
+        assert_eq!(
+            JanitorError::external_service("git", "clone failed").to_string(),
+            "External service error: git: clone failed"
+        );
+        assert_eq!(
+            JanitorError::process("cargo build", "exit code 1").to_string(),
+            "Process error: 'cargo build' failed: exit code 1"
+        );
+    }
+
+    #[test]
+    fn test_from_io_error() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err: JanitorError = io_err.into();
+        assert_eq!(err.error_type(), "io");
+        assert_eq!(err.http_status(), 500);
+    }
+
+    #[test]
+    fn test_from_serde_json_error() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
+        let err: JanitorError = json_err.into();
+        assert_eq!(err.error_type(), "parsing");
+    }
+
+    #[test]
+    fn test_from_url_parse_error() {
+        let url_err = url::Url::parse("not a url %%%").unwrap_err();
+        let err: JanitorError = url_err.into();
+        assert_eq!(err.error_type(), "validation");
+    }
+
+    #[test]
+    fn test_option_ext_ok_or_not_found() {
+        let some: Option<i32> = Some(42);
+        assert_eq!(some.ok_or_not_found("item", "1").unwrap(), 42);
+
+        let none: Option<i32> = None;
+        let err = none.ok_or_not_found("item", "1").unwrap_err();
+        assert_eq!(err.http_status(), 404);
+        assert_eq!(err.to_string(), "Not found: item '1'");
+    }
+
+    #[test]
+    fn test_option_ext_ok_or_internal() {
+        let none: Option<i32> = None;
+        let err = none.ok_or_internal("missing value").unwrap_err();
+        assert_eq!(err.http_status(), 500);
+        assert_eq!(err.to_string(), "Internal error: missing value");
+    }
+
+    #[test]
+    fn test_option_ext_ok_or_validation() {
+        let none: Option<i32> = None;
+        let err = none.ok_or_validation("required field").unwrap_err();
+        assert_eq!(err.http_status(), 400);
+        assert_eq!(err.to_string(), "Validation error: required field");
+    }
+
+    #[test]
     fn test_standard_error_response() {
         let err = JanitorError::not_found("run", "test-123");
         let response = StandardErrorResponse::from_janitor_error(err);
@@ -881,10 +1055,10 @@ mod tests {
         assert_eq!(response.error.r#type, "not_found");
         assert_eq!(response.error.code, "RUN_NOT_FOUND");
         assert_eq!(response.error.message, "Not found: run 'test-123'");
-        assert!(!response.error.transient);
+        assert_eq!(response.error.transient, false);
         assert!(response.error.details.is_some());
-        assert!(response.error.help_url.is_none()); // not_found errors don't have help URLs
-        assert!(response.timestamp.len() > 0);
+        assert_eq!(response.error.help_url, None);
+        assert!(!response.timestamp.is_empty());
     }
 
     #[test]
@@ -906,8 +1080,29 @@ mod tests {
     }
 
     #[test]
+    fn test_standard_error_response_serialization() {
+        let err = JanitorError::validation("bad input");
+        let response = StandardErrorResponse::from_janitor_error(err)
+            .with_request_id("req-abc".to_string())
+            .with_service("publisher".to_string());
+
+        let json = serde_json::to_value(&response).unwrap();
+        assert_eq!(json["error"]["type"], "validation");
+        assert_eq!(json["error"]["code"], "VALIDATION_ERROR");
+        assert_eq!(json["error"]["message"], "Validation error: bad input");
+        assert_eq!(json["error"]["transient"], false);
+        assert_eq!(json["request_id"], "req-abc");
+        assert_eq!(json["service"], "publisher");
+    }
+
+    #[test]
+    fn test_into_janitor_error_string() {
+        let err: JanitorError = "something failed".into_janitor_error();
+        assert_eq!(err.to_string(), "Internal error: something failed");
+    }
+
+    #[test]
     fn test_convenience_responses() {
-        // Test that convenience functions return the right error types
         use crate::error::responses::*;
 
         // These should compile and return IntoResponse types
@@ -919,5 +1114,74 @@ mod tests {
         let _service_resp = external_service_error("git", "clone failed");
         let _rate_resp = rate_limited("too many requests");
         let _timeout_resp = timeout_error("operation timed out");
+    }
+
+    #[test]
+    fn test_error_context_with_closure() {
+        let result: std::result::Result<(), std::io::Error> = Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "access denied",
+        ));
+
+        let err = result
+            .with_context(|| format!("reading config for {}", "myservice"))
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Internal error: reading config for myservice: I/O error: access denied"
+        );
+    }
+
+    #[test]
+    fn test_result_ext_not_found_context() {
+        let result: std::result::Result<(), std::io::Error> =
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "missing"));
+        let err = result.not_found_context("run", "abc").unwrap_err();
+        assert_eq!(err.to_string(), "Not found: run 'abc'");
+        assert_eq!(err.http_status(), 404);
+    }
+
+    #[test]
+    fn test_result_ext_validation_context() {
+        let result: std::result::Result<(), std::io::Error> =
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "bad"));
+        let err = result.validation_context("invalid input").unwrap_err();
+        assert_eq!(err.to_string(), "Validation error: invalid input");
+        assert_eq!(err.http_status(), 400);
+    }
+
+    #[test]
+    fn test_errors_module_helpers() {
+        use crate::error::errors::*;
+
+        assert_eq!(
+            archive_error("corrupt").to_string(),
+            "Archive error: corrupt"
+        );
+        assert_eq!(upload_error("failed").to_string(), "Upload error: failed");
+        assert_eq!(
+            package_scanning_error("no packages").to_string(),
+            "Package scanning error: no packages"
+        );
+        assert_eq!(
+            repository_error("bad repo").to_string(),
+            "Repository error: bad repo"
+        );
+        assert_eq!(
+            gpg_operation_failed("no key").to_string(),
+            "GPG error: no key"
+        );
+        assert_eq!(
+            compression_failed("corrupt archive").to_string(),
+            "Compression error: corrupt archive"
+        );
+        assert_eq!(
+            resource_limit_exceeded("out of disk").to_string(),
+            "Resource limit exceeded: out of disk"
+        );
+        assert_eq!(
+            artifacts_missing("run-123").to_string(),
+            "Artifact error: Missing artifacts for build run-123"
+        );
     }
 }

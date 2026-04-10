@@ -248,3 +248,181 @@ pub struct DebianBuildConfig {
     #[serde(rename = "dep_server_url")]
     pub dep_server_url: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_metadata_default() {
+        let m = Metadata::default();
+        assert_eq!(m.code, None);
+        assert_eq!(m.description, None);
+        assert_eq!(m.branches.len(), 0);
+        assert_eq!(m.tags.len(), 0);
+        assert_eq!(m.remotes.len(), 0);
+    }
+
+    #[test]
+    fn test_metadata_update_from_failure() {
+        let mut m = Metadata::default();
+        let failure = WorkerFailure {
+            code: "build-failed".to_string(),
+            description: "compilation error".to_string(),
+            details: Some(serde_json::json!({"file": "main.rs"})),
+            stage: vec!["build".to_string(), "compile".to_string()],
+            transient: Some(false),
+        };
+        m.update(&failure);
+        assert_eq!(m.code, Some("build-failed".to_string()));
+        assert_eq!(m.description, Some("compilation error".to_string()));
+        assert_eq!(
+            m.failure_details,
+            Some(serde_json::json!({"file": "main.rs"}))
+        );
+        assert_eq!(m.stage, Some("build/compile".to_string()));
+        assert_eq!(m.transient, Some(false));
+    }
+
+    #[test]
+    fn test_metadata_add_branch() {
+        let mut m = Metadata::default();
+        m.add_branch(
+            "main".to_string(),
+            "lintian-fixes".to_string(),
+            Some(RevisionId::from(b"base-rev".to_vec())),
+            Some(RevisionId::from(b"new-rev".to_vec())),
+        );
+        assert_eq!(m.branches.len(), 1);
+        assert_eq!(m.branches[0].0, "main");
+        assert_eq!(m.branches[0].1, Some("lintian-fixes".to_string()));
+        assert_eq!(
+            m.branches[0].2,
+            Some(RevisionId::from(b"base-rev".to_vec()))
+        );
+        assert_eq!(m.branches[0].3, Some(RevisionId::from(b"new-rev".to_vec())));
+    }
+
+    #[test]
+    fn test_metadata_add_remote() {
+        let mut m = Metadata::default();
+        m.add_remote(
+            "origin".to_string(),
+            Url::parse("https://salsa.debian.org/foo/bar").unwrap(),
+        );
+        assert_eq!(m.remotes.len(), 1);
+        assert_eq!(
+            m.remotes["origin"].url,
+            Url::parse("https://salsa.debian.org/foo/bar").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_metadata_serde_roundtrip() {
+        let mut m = Metadata::default();
+        m.campaign = Some("lintian-fixes".to_string());
+        m.code = Some("success".to_string());
+        m.vcs_type = Some(VcsType::Git);
+        m.branch_url = Some(Url::parse("https://salsa.debian.org/foo/bar").unwrap());
+
+        let json = serde_json::to_string(&m).unwrap();
+        let roundtripped: Metadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.campaign, Some("lintian-fixes".to_string()));
+        assert_eq!(roundtripped.code, Some("success".to_string()));
+        assert_eq!(roundtripped.vcs_type, Some(VcsType::Git));
+    }
+
+    #[test]
+    fn test_worker_failure_display() {
+        let f = WorkerFailure {
+            code: "build-failed".to_string(),
+            description: "compilation error".to_string(),
+            details: None,
+            stage: vec!["build".to_string()],
+            transient: None,
+        };
+        assert_eq!(f.to_string(), "build-failed: compilation error");
+    }
+
+    #[test]
+    fn test_worker_failure_serde_roundtrip() {
+        let f = WorkerFailure {
+            code: "command-not-found".to_string(),
+            description: "Command foo not found".to_string(),
+            details: Some(serde_json::json!({"command": "foo"})),
+            stage: vec!["codemod".to_string()],
+            transient: Some(true),
+        };
+        let json = serde_json::to_string(&f).unwrap();
+        let roundtripped: WorkerFailure = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped, f);
+    }
+
+    #[test]
+    fn test_target_details_new() {
+        let td = TargetDetails::new(
+            "debian".to_string(),
+            serde_json::json!({"distribution": "unstable"}),
+        );
+        assert_eq!(td.name, "debian");
+        assert_eq!(td.details["distribution"], "unstable");
+    }
+
+    #[test]
+    fn test_generic_build_config_default() {
+        let config = GenericBuildConfig::default();
+        assert_eq!(config.chroot, None);
+        assert_eq!(config.dep_server_url, None);
+    }
+
+    #[test]
+    fn test_generic_build_config_serde() {
+        let json = r#"{"chroot": "unstable-amd64-sbuild"}"#;
+        let config: GenericBuildConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.chroot, Some("unstable-amd64-sbuild".to_string()));
+        assert_eq!(config.dep_server_url, None);
+    }
+
+    #[test]
+    fn test_assignment_serde() {
+        let json = r#"{
+            "id": "assign-1",
+            "queue_id": 42,
+            "campaign": "lintian-fixes",
+            "codebase": "mycodebase",
+            "force-build": false,
+            "branch": {
+                "cached_url": null,
+                "vcs_type": "git",
+                "url": "https://salsa.debian.org/foo/bar",
+                "subpath": ".",
+                "additional_colocated_branches": null,
+                "default-empty": false
+            },
+            "resume": null,
+            "target_repository": {
+                "url": "https://vcs.example.com/git/mycodebase"
+            },
+            "skip-setup-validation": false,
+            "codemod": {
+                "command": "lintian-brush",
+                "environment": {}
+            },
+            "env": {},
+            "build": {
+                "target": "debian",
+                "config": {},
+                "environment": null
+            }
+        }"#;
+        let assignment: Assignment = serde_json::from_str(json).unwrap();
+        assert_eq!(assignment.id, "assign-1");
+        assert_eq!(assignment.queue_id, 42);
+        assert_eq!(assignment.campaign, "lintian-fixes");
+        assert_eq!(assignment.codebase, "mycodebase");
+        assert_eq!(assignment.force_build, false);
+        assert_eq!(assignment.skip_setup_validation, false);
+        assert_eq!(assignment.branch.vcs_type, VcsType::Git);
+        assert!(assignment.resume.is_none());
+    }
+}

@@ -580,6 +580,140 @@ impl From<sqlx::Error> for Error {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_publish_mode_value() {
+        assert_eq!(publish_mode_value(&Mode::Skip), 0);
+        assert_eq!(publish_mode_value(&Mode::BuildOnly), 0);
+        assert_eq!(publish_mode_value(&Mode::Push), 500);
+        assert_eq!(publish_mode_value(&Mode::Propose), 400);
+        assert_eq!(publish_mode_value(&Mode::AttemptPush), 450);
+        assert_eq!(publish_mode_value(&Mode::Bts), 100);
+        assert_eq!(publish_mode_value(&Mode::PushDerived), 200);
+    }
+
+    #[test]
+    fn test_calculate_offset_basic() {
+        let estimated_duration = Duration::seconds(60);
+        let offset = calculate_offset(
+            estimated_duration,
+            Some(0.5),   // normalized_codebase_value
+            0.8,         // estimated_probability_of_success
+            Some(100.0), // candidate_value
+            5,           // total_previous_runs
+            None,        // success_chance
+        );
+        assert!(offset > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_offset_first_run_bonus() {
+        let estimated_duration = Duration::seconds(60);
+        let offset_first = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.8,
+            Some(100.0),
+            0, // first run
+            None,
+        );
+        let offset_subsequent = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.8,
+            Some(100.0),
+            5, // has prior runs
+            None,
+        );
+        // First run should have lower offset (higher priority) due to FIRST_RUN_BONUS
+        assert!(offset_first < offset_subsequent);
+    }
+
+    #[test]
+    fn test_calculate_offset_higher_probability_lower_offset() {
+        let estimated_duration = Duration::seconds(60);
+        let offset_high_prob = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.9, // high probability
+            Some(100.0),
+            5,
+            None,
+        );
+        let offset_low_prob = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.1, // low probability
+            Some(100.0),
+            5,
+            None,
+        );
+        // Higher probability means higher expected value, so lower offset
+        assert!(offset_high_prob < offset_low_prob);
+    }
+
+    #[test]
+    fn test_calculate_offset_higher_value_lower_offset() {
+        let estimated_duration = Duration::seconds(60);
+        let offset_high_value = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.5,
+            Some(1000.0), // high value
+            5,
+            None,
+        );
+        let offset_low_value = calculate_offset(
+            estimated_duration,
+            Some(0.5),
+            0.5,
+            Some(10.0), // low value
+            5,
+            None,
+        );
+        assert!(offset_high_value < offset_low_value);
+    }
+
+    #[test]
+    fn test_calculate_offset_longer_duration_higher_offset() {
+        let offset_short =
+            calculate_offset(Duration::seconds(10), Some(0.5), 0.5, Some(100.0), 5, None);
+        let offset_long =
+            calculate_offset(Duration::seconds(600), Some(0.5), 0.5, Some(100.0), 5, None);
+        assert!(offset_long > offset_short);
+    }
+
+    #[test]
+    fn test_calculate_offset_default_codebase_value() {
+        let offset = calculate_offset(
+            Duration::seconds(60),
+            None, // should use DEFAULT_NORMALIZED_CODEBASE_VALUE
+            0.5,
+            Some(100.0),
+            5,
+            None,
+        );
+        assert!(offset > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_offset_minimum_codebase_value() {
+        // Very small codebase value should be clamped to MINIMUM_NORMALIZED_CODEBASE_VALUE
+        let offset = calculate_offset(
+            Duration::seconds(60),
+            Some(0.001), // below minimum
+            0.5,
+            Some(100.0),
+            5,
+            None,
+        );
+        assert!(offset > 0.0);
+    }
+}
+
 pub async fn do_schedule(
     conn: &PgPool,
     campaign: &str,

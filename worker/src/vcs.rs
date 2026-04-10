@@ -2,6 +2,7 @@ use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
+use breezyshim::workingtree::WorkingTree;
 use breezyshim::RevisionId;
 use janitor::vcs::VcsType;
 use std::collections::HashMap;

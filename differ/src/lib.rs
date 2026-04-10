@@ -37,3 +37,53 @@ pub fn is_binary(name: &OsStr) -> bool {
         name.ends_with(".deb") || name.ends_with(".udeb")
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_is_binary_deb() {
+        assert_eq!(is_binary(OsStr::new("package_1.0_amd64.deb")), true);
+    }
+
+    #[test]
+    fn test_is_binary_udeb() {
+        assert_eq!(is_binary(OsStr::new("package_1.0_amd64.udeb")), true);
+    }
+
+    #[test]
+    fn test_is_binary_not_binary() {
+        assert_eq!(is_binary(OsStr::new("package_1.0.dsc")), false);
+        assert_eq!(is_binary(OsStr::new("package_1.0.tar.gz")), false);
+        assert_eq!(is_binary(OsStr::new("package_1.0.changes")), false);
+        assert_eq!(is_binary(OsStr::new("Makefile")), false);
+    }
+
+    #[test]
+    fn test_find_binaries() {
+        let td = TempDir::new().unwrap();
+        std::fs::write(td.path().join("package.deb"), b"fake deb").unwrap();
+        std::fs::write(td.path().join("source.dsc"), b"fake dsc").unwrap();
+        std::fs::write(td.path().join("installer.udeb"), b"fake udeb").unwrap();
+
+        let entries: Vec<(OsString, PathBuf)> = find_binaries(td.path()).collect();
+        assert_eq!(entries.len(), 3);
+
+        let mut names: Vec<String> = entries
+            .iter()
+            .map(|(name, _)| name.to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["installer.udeb", "package.deb", "source.dsc"]);
+    }
+
+    #[test]
+    fn test_find_binaries_empty_dir() {
+        let td = TempDir::new().unwrap();
+        let entries: Vec<(OsString, PathBuf)> = find_binaries(td.path()).collect();
+        assert_eq!(entries.len(), 0);
+    }
+}

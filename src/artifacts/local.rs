@@ -112,3 +112,182 @@ impl ArtifactManager for LocalArtifactManager {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::artifacts::ArtifactManager;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, LocalArtifactManager) {
+        let td = TempDir::new().unwrap();
+        let mgr = LocalArtifactManager::new(td.path()).unwrap();
+        (td, mgr)
+    }
+
+    fn create_source_dir(files: &[(&str, &[u8])]) -> TempDir {
+        let td = TempDir::new().unwrap();
+        for (name, content) in files {
+            fs::write(td.path().join(name), content).unwrap();
+        }
+        td
+    }
+
+    #[tokio::test]
+    async fn test_store_and_retrieve() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("hello.txt", b"hello world"), ("data.bin", b"\x00\x01")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+
+        let retrieve_dir = TempDir::new().unwrap();
+        mgr.retrieve_artifacts("run-1", retrieve_dir.path(), None)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(retrieve_dir.path().join("hello.txt")).unwrap(),
+            "hello world"
+        );
+        assert_eq!(
+            fs::read(retrieve_dir.path().join("data.bin")).unwrap(),
+            b"\x00\x01"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_store_twice_is_idempotent() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("file.txt", b"content")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+        // Storing again should not error
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_store_with_names_filter() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("keep.txt", b"yes"), ("skip.txt", b"no")]);
+
+        mgr.store_artifacts("run-1", source.path(), Some(&["keep.txt".to_string()]))
+            .await
+            .unwrap();
+
+        let retrieve_dir = TempDir::new().unwrap();
+        mgr.retrieve_artifacts("run-1", retrieve_dir.path(), None)
+            .await
+            .unwrap();
+
+        assert!(retrieve_dir.path().join("keep.txt").exists());
+        assert!(!retrieve_dir.path().join("skip.txt").exists());
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_nonexistent() {
+        let (_td, mgr) = setup();
+        let retrieve_dir = TempDir::new().unwrap();
+        let result = mgr
+            .retrieve_artifacts("nonexistent", retrieve_dir.path(), None)
+            .await;
+        assert!(matches!(result, Err(Error::ArtifactsMissing)));
+    }
+
+    #[tokio::test]
+    async fn test_delete_artifacts() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("file.txt", b"content")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+        mgr.delete_artifacts("run-1").await.unwrap();
+
+        let retrieve_dir = TempDir::new().unwrap();
+        let result = mgr
+            .retrieve_artifacts("run-1", retrieve_dir.path(), None)
+            .await;
+        assert!(matches!(result, Err(Error::ArtifactsMissing)));
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent() {
+        let (_td, mgr) = setup();
+        let result = mgr.delete_artifacts("nonexistent").await;
+        assert!(matches!(result, Err(Error::ArtifactsMissing)));
+    }
+
+    #[tokio::test]
+    async fn test_iter_ids() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("file.txt", b"content")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+        mgr.store_artifacts("run-2", source.path(), None)
+            .await
+            .unwrap();
+
+        let mut ids: Vec<String> = mgr.iter_ids().await.collect();
+        ids.sort();
+        assert_eq!(ids, vec!["run-1", "run-2"]);
+    }
+
+    #[tokio::test]
+    async fn test_iter_ids_empty() {
+        let (_td, mgr) = setup();
+        let ids: Vec<String> = mgr.iter_ids().await.collect();
+        assert_eq!(ids, Vec::<String>::new());
+    }
+
+    #[tokio::test]
+    async fn test_get_artifact() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("file.txt", b"hello")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+
+        let mut reader = mgr.get_artifact("run-1", "file.txt").await.unwrap();
+        let mut content = String::new();
+        reader.read_to_string(&mut content).unwrap();
+        assert_eq!(content, "hello");
+    }
+
+    #[tokio::test]
+    async fn test_public_artifact_url() {
+        let (_td, mgr) = setup();
+        let url = mgr.public_artifact_url("run-1", "file.txt");
+        assert_eq!(url.scheme(), "file");
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_with_filter() {
+        let (_td, mgr) = setup();
+        let source = create_source_dir(&[("keep.txt", b"yes"), ("skip.txt", b"no")]);
+
+        mgr.store_artifacts("run-1", source.path(), None)
+            .await
+            .unwrap();
+
+        let retrieve_dir = TempDir::new().unwrap();
+        mgr.retrieve_artifacts(
+            "run-1",
+            retrieve_dir.path(),
+            Some(&|name: &str| name == "keep.txt"),
+        )
+        .await
+        .unwrap();
+
+        assert!(retrieve_dir.path().join("keep.txt").exists());
+        assert!(!retrieve_dir.path().join("skip.txt").exists());
+    }
+}
