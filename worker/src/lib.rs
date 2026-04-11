@@ -1,7 +1,6 @@
 use breezyshim::branch::Branch;
 use breezyshim::controldir::ControlDirFormat;
 use breezyshim::error::Error as BrzError;
-use breezyshim::repository::Repository;
 use breezyshim::transport::Transport;
 use breezyshim::tree::{MutableTree, WorkingTree};
 use breezyshim::workingtree::PyWorkingTree;

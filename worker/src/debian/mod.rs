@@ -58,7 +58,6 @@ pub fn debian_make_changes(
     committer: Option<&str>,
     update_changelog: DebUpdateChangelog,
 ) -> std::result::Result<DebianCommandResult, WorkerFailure> {
-    use pyo3::prelude::*;
     if argv.is_empty() {
         return Err(WorkerFailure {
             code: "no-changes".to_string(),
@@ -70,30 +69,6 @@ pub fn debian_make_changes(
     }
 
     log::info!("Running {:?}", argv);
-
-    // TODO(jelmer): This is only necessary for deb-new-upstream
-    let sys_path = pyo3::Python::attach(|py| {
-        let sys = py.import("sys").unwrap();
-        Ok::<String, pyo3::PyErr>(
-            sys.getattr("path")
-                .unwrap()
-                .extract::<Vec<String>>()
-                .unwrap()
-                .join(":"),
-        )
-    })
-    .unwrap();
-
-    let sys_executable = pyo3::Python::attach(|py| {
-        let sys = py.import("sys").unwrap();
-        Ok::<String, pyo3::PyErr>(
-            sys.getattr("executable")
-                .unwrap()
-                .extract::<String>()
-                .unwrap(),
-        )
-    })
-    .unwrap();
 
     let mut dist_command = vec![
         "janitor-dist".to_string(),

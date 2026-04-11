@@ -29,6 +29,7 @@ fn publish_mode_value(mode: &Mode) -> usize {
 #[derive(sqlx::FromRow)]
 pub struct ScheduleRequest {
     codebase: String,
+    #[allow(dead_code)]
     branch_url: String,
     campaign: String,
     context: String,
@@ -485,7 +486,7 @@ FROM
 WHERE
   source = "###,
     );
-    query.push_bind(rel.name());
+    query.push_bind(rel.try_name().expect("relation has no name"));
 
     if let Some(version) = rel.version() {
         query.push(" AND version ");

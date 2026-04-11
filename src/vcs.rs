@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
-use breezyshim::repository::{GenericRepository, PyRepository, Repository};
+use breezyshim::repository::{GenericRepository, Repository};
 use breezyshim::RevisionId;
-use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use silver_platter::vcs::BranchOpenError;
 use std::collections::HashMap;
@@ -682,39 +681,43 @@ impl VcsManager for LocalGitVcsManager {
         let repo = self.get_repository(codebase).unwrap().unwrap();
         let old_sha = repo.lookup_bzr_revision_id(old_revid).unwrap().0;
         let new_sha = repo.lookup_bzr_revision_id(new_revid).unwrap().0;
+        let old_sha_str = std::str::from_utf8(&old_sha).unwrap();
+        let new_sha_str = std::str::from_utf8(&new_sha).unwrap();
+        let repo_path = repo.user_transport().local_abspath(Path::new(".")).unwrap();
 
-        // Collect all the info we need from the Python objects before dropping repo
-        let commit_infos: Vec<(Vec<u8>, String)> = Python::attach(|py| {
-            let mut ret = vec![];
-            let repo_obj = repo.to_object(py);
-            let git = repo_obj.getattr(py, "_git").unwrap();
-            let walker = git
-                .call_method1(py, "get_walker", (new_sha, old_sha))
-                .unwrap();
+        // Use git log with a format that separates commit hash and message with a NUL byte
+        let output = tokio::process::Command::new("git")
+            .arg("log")
+            .arg("--format=%H%x00%s")
+            .arg(&format!("{}..{}", old_sha_str, new_sha_str))
+            .current_dir(&repo_path)
+            .output()
+            .await
+            .unwrap();
 
-            while let Ok(entry) = walker.call_method0(py, "__next__") {
-                let commit: Py<PyAny> = entry.getattr(py, "commit").unwrap();
-                let commit_id: Vec<u8> = commit.getattr(py, "id").unwrap().extract(py).unwrap();
-                let message = commit.getattr(py, "message").unwrap().to_string();
-                ret.push((commit_id, message));
-            }
-
-            ret
-        });
-
-        // Now convert commit_ids to revision_ids
-        let mut ret = vec![];
-        for (commit_id, message) in commit_infos {
-            let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
-            ret.push(RevisionInfo {
-                commit_id: Some(commit_id),
-                revision_id,
-                message,
-                link: None,
-            });
+        if !output.status.success() {
+            panic!(
+                "git log failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
-        ret
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let (commit_hex, message) = line.split_once('\0').unwrap();
+                let commit_id = commit_hex.as_bytes().to_vec();
+                let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
+                RevisionInfo {
+                    commit_id: Some(commit_id),
+                    revision_id,
+                    message: message.to_string(),
+                    link: None,
+                }
+            })
+            .collect()
     }
 }
 

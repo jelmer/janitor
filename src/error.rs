@@ -50,16 +50,8 @@ pub enum JanitorError {
     /// Redis connection/operation errors
     Redis(redis::RedisError),
 
-    /// Template rendering errors
-    #[cfg(feature = "tera")]
-    Template(tera::Error),
-
     /// External process execution errors
     Process { command: String, reason: String },
-
-    /// Git-specific errors (optional feature)
-    #[cfg(feature = "git2")]
-    Git(git2::Error),
 
     /// Archive/package operations
     Archive(String),
@@ -108,13 +100,9 @@ impl std::fmt::Display for JanitorError {
             Self::PermissionDenied(msg) => write!(f, "Permission denied: {}", msg),
             Self::Internal(msg) => write!(f, "Internal error: {}", msg),
             Self::Redis(e) => write!(f, "Redis error: {}", e),
-            #[cfg(feature = "tera")]
-            Self::Template(e) => write!(f, "Template error: {}", e),
             Self::Process { command, reason } => {
                 write!(f, "Process error: '{}' failed: {}", command, reason)
             }
-            #[cfg(feature = "git2")]
-            Self::Git(e) => write!(f, "Git error: {}", e),
             Self::Archive(msg) => write!(f, "Archive error: {}", msg),
             Self::Upload(msg) => write!(f, "Upload error: {}", msg),
             Self::Gpg(msg) => write!(f, "GPG error: {}", msg),
@@ -156,20 +144,6 @@ impl From<reqwest::Error> for JanitorError {
 impl From<redis::RedisError> for JanitorError {
     fn from(e: redis::RedisError) -> Self {
         Self::Redis(e)
-    }
-}
-
-#[cfg(feature = "tera")]
-impl From<tera::Error> for JanitorError {
-    fn from(e: tera::Error) -> Self {
-        Self::Template(e)
-    }
-}
-
-#[cfg(feature = "git2")]
-impl From<git2::Error> for JanitorError {
-    fn from(e: git2::Error) -> Self {
-        Self::Git(e)
     }
 }
 
@@ -327,11 +301,7 @@ impl JanitorError {
             Self::PermissionDenied(_) => "permission_denied",
             Self::Internal(_) => "internal",
             Self::Redis(_) => "redis",
-            #[cfg(feature = "tera")]
-            Self::Template(_) => "template",
             Self::Process { .. } => "process",
-            #[cfg(feature = "git2")]
-            Self::Git(_) => "git",
             Self::Archive(_) => "archive",
             Self::Upload(_) => "upload",
             Self::Gpg(_) => "gpg",
@@ -365,11 +335,7 @@ impl JanitorError {
             Self::PermissionDenied(_) => "PERMISSION_DENIED".to_string(),
             Self::Internal(_) => "INTERNAL_ERROR".to_string(),
             Self::Redis(_) => "REDIS_ERROR".to_string(),
-            #[cfg(feature = "tera")]
-            Self::Template(_) => "TEMPLATE_ERROR".to_string(),
             Self::Process { .. } => "PROCESS_ERROR".to_string(),
-            #[cfg(feature = "git2")]
-            Self::Git(_) => "GIT_ERROR".to_string(),
             Self::Archive(_) => "ARCHIVE_ERROR".to_string(),
             Self::Upload(_) => "UPLOAD_ERROR".to_string(),
             Self::Gpg(_) => "GPG_ERROR".to_string(),
