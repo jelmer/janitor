@@ -168,67 +168,6 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
-pub fn py_to_serde_json(obj: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<serde_json::Value> {
-    use pyo3::prelude::*;
-    if obj.is_none() {
-        Ok(serde_json::Value::Null)
-    } else if let Ok(b) = obj.downcast::<pyo3::types::PyBool>() {
-        Ok(serde_json::Value::Bool(b.is_true()))
-    } else if let Ok(f) = obj.downcast::<pyo3::types::PyFloat>() {
-        Ok(serde_json::Value::Number(
-            serde_json::Number::from_f64(f.value()).unwrap(),
-        ))
-    } else if let Ok(s) = obj.downcast::<pyo3::types::PyString>() {
-        Ok(serde_json::Value::String(s.to_string_lossy().to_string()))
-    } else if let Ok(l) = obj.downcast::<pyo3::types::PyList>() {
-        Ok(serde_json::Value::Array(
-            l.iter()
-                .map(|x| py_to_serde_json(&x))
-                .collect::<PyResult<Vec<_>>>()?,
-        ))
-    } else if let Ok(d) = obj.downcast::<pyo3::types::PyDict>() {
-        let mut ret = serde_json::Map::new();
-        for (k, v) in d.iter() {
-            let k = k.extract::<String>()?;
-            let v = py_to_serde_json(&v)?;
-            ret.insert(k, v);
-        }
-        Ok(serde_json::Value::Object(ret))
-    } else {
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            ("unsupported type",),
-        ))
-    }
-}
-
-pub fn serde_json_to_py<'a, 'b>(value: &'a serde_json::Value) -> pyo3::Py<pyo3::PyAny>
-where
-    'b: 'a,
-{
-    use pyo3::prelude::*;
-    Python::with_gil(|py| match value {
-        serde_json::Value::Null => py.None(),
-        serde_json::Value::Bool(b) => pyo3::types::PyBool::new(py, *b).as_any().clone().unbind(),
-        serde_json::Value::Number(n) => pyo3::types::PyFloat::new(py, n.as_f64().unwrap())
-            .into_any()
-            .unbind(),
-        serde_json::Value::String(s) => pyo3::types::PyString::new(py, s.as_str())
-            .into_any()
-            .unbind(),
-        serde_json::Value::Array(a) => pyo3::types::PyList::new(py, a.iter().map(serde_json_to_py))
-            .unwrap()
-            .into_any()
-            .unbind(),
-        serde_json::Value::Object(o) => {
-            let ret = pyo3::types::PyDict::new(py);
-            for (k, v) in o.into_iter() {
-                ret.set_item(k, serde_json_to_py(v)).unwrap();
-            }
-            ret.into_any().unbind()
-        }
-    })
-}
-
 pub fn run_worker(
     codebase: &str,
     campaign: &str,

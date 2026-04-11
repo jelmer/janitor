@@ -1,10 +1,8 @@
 use async_trait::async_trait;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
-use breezyshim::repository::{GenericRepository, PyRepository, Repository};
+use breezyshim::repository::{GenericRepository, Repository};
 use breezyshim::RevisionId;
-use pyo3::exceptions::PyAttributeError;
-use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use silver_platter::vcs::BranchOpenError;
 use std::collections::HashMap;
@@ -67,23 +65,11 @@ impl std::str::FromStr for VcsType {
 
 pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<VcsType, BrzError> {
     let repository = branch.repository();
-    Python::attach(|py| {
-        let object = repository.to_object(py);
-        match object.getattr(py, "vcs") {
-            Ok(vcs) => vcs
-                .getattr(py, "abbreviation")
-                .unwrap()
-                .extract::<String>(py),
-            Err(e) if e.is_instance_of::<PyAttributeError>(py) => Ok("bzr".to_string()),
-            Err(e) => Err(e),
-        }
-    })
-    .map_err(BrzError::from)
-    .map(|vcs| match vcs.as_str() {
-        "bzr" => VcsType::Bzr,
-        "git" => VcsType::Git,
-        _ => panic!("Unknown VCS type: {}", vcs),
-    })
+    match repository.vcs_type() {
+        breezyshim::foreign::VcsType::Git => Ok(VcsType::Git),
+        breezyshim::foreign::VcsType::Bazaar => Ok(VcsType::Bzr),
+        other => panic!("Unknown VCS type: {:?}", other),
+    }
 }
 
 pub fn is_alioth_url(url: &Url) -> bool {
@@ -99,44 +85,286 @@ pub fn is_alioth_url(url: &Url) -> bool {
 }
 
 #[cfg(test)]
-mod is_authenticated_url_tests {
+mod tests {
     use super::*;
+
     #[test]
-    fn test_simple() {
-        assert!(super::is_authenticated_url(
+    fn test_authenticated_urls() {
+        assert!(is_authenticated_url(
             &Url::parse("git+ssh://example.com").unwrap()
         ));
-        assert!(super::is_authenticated_url(
+        assert!(is_authenticated_url(
             &Url::parse("bzr+ssh://example.com").unwrap()
         ));
-        assert!(!super::is_authenticated_url(
-            &Url::parse("http://example.com").unwrap()
+        assert!(is_authenticated_url(
+            &Url::parse("git+ssh://git.example.com/repo.git").unwrap()
         ));
     }
-}
 
-#[cfg(test)]
-mod is_alioth_url_tests {
-    use super::*;
     #[test]
-    fn test_simple() {
-        assert!(super::is_alioth_url(
+    fn test_not_authenticated_urls() {
+        assert!(!is_authenticated_url(
+            &Url::parse("http://example.com").unwrap()
+        ));
+        assert!(!is_authenticated_url(
+            &Url::parse("https://example.com").unwrap()
+        ));
+        assert!(!is_authenticated_url(
+            &Url::parse("git://example.com/repo.git").unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_alioth_urls() {
+        assert!(is_alioth_url(
             &Url::parse("https://anonscm.debian.org/cgit/pkg-ocaml-maint/packages/ocamlbuild.git")
                 .unwrap()
         ));
-        assert!(super::is_alioth_url(
+        assert!(is_alioth_url(
             &Url::parse("https://git.debian.org/git/pkg-ocaml-maint/packages/ocamlbuild.git")
                 .unwrap()
         ));
-        assert!(super::is_alioth_url(
+        assert!(is_alioth_url(
             &Url::parse(
                 "https://alioth.debian.org/anonscm/git/pkg-ocaml-maint/packages/ocamlbuild.git"
             )
             .unwrap()
         ));
-        assert!(!super::is_alioth_url(
-            &Url::parse("https://example.com").unwrap()
+        assert!(is_alioth_url(
+            &Url::parse("https://svn.debian.org/svn/some-pkg").unwrap()
         ));
+        assert!(is_alioth_url(
+            &Url::parse("https://bzr.debian.org/bzr/some-pkg").unwrap()
+        ));
+        assert!(is_alioth_url(
+            &Url::parse("https://hg.debian.org/hg/some-pkg").unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_not_alioth_urls() {
+        assert!(!is_alioth_url(&Url::parse("https://example.com").unwrap()));
+        assert!(!is_alioth_url(
+            &Url::parse("https://salsa.debian.org/foo/bar").unwrap()
+        ));
+        assert!(!is_alioth_url(
+            &Url::parse("https://github.com/foo/bar").unwrap()
+        ));
+    }
+
+    #[test]
+    fn test_vcs_type_from_str() {
+        assert_eq!("git".parse::<VcsType>().unwrap(), VcsType::Git);
+        assert_eq!("bzr".parse::<VcsType>().unwrap(), VcsType::Bzr);
+        assert!("svn".parse::<VcsType>().is_err());
+        assert!("".parse::<VcsType>().is_err());
+    }
+
+    #[test]
+    fn test_vcs_type_display() {
+        assert_eq!(VcsType::Git.to_string(), "git");
+        assert_eq!(VcsType::Bzr.to_string(), "bzr");
+    }
+
+    #[test]
+    fn test_vcs_type_serde_roundtrip() {
+        let git = VcsType::Git;
+        let json = serde_json::to_string(&git).unwrap();
+        assert_eq!(json, r#""git""#);
+        let roundtripped: VcsType = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped, git);
+
+        let bzr = VcsType::Bzr;
+        let json = serde_json::to_string(&bzr).unwrap();
+        assert_eq!(json, r#""bzr""#);
+        let roundtripped: VcsType = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped, bzr);
+    }
+
+    #[test]
+    fn test_vcs_type_serde_invalid() {
+        assert!(serde_json::from_str::<VcsType>(r#""svn""#).is_err());
+    }
+
+    #[test]
+    fn test_convert_branch_exception_rate_limited() {
+        let err = BranchOpenError::RateLimited {
+            url: Url::parse("https://example.com").unwrap(),
+            description: "Too many requests".to_string(),
+            retry_after: Some(60.0),
+        };
+        let failure = convert_branch_exception(&Url::parse("https://example.com").unwrap(), err);
+        assert_eq!(failure.code, "too-many-requests");
+        assert_eq!(failure.retry_after, Some(chrono::Duration::seconds(60)));
+    }
+
+    #[test]
+    fn test_convert_branch_exception_missing() {
+        let err = BranchOpenError::Missing {
+            url: Url::parse("https://example.com/repo").unwrap(),
+            description: "Not found".to_string(),
+        };
+        let failure =
+            convert_branch_exception(&Url::parse("https://example.com/repo").unwrap(), err);
+        assert_eq!(failure.code, "branch-missing");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_missing_alioth() {
+        let err = BranchOpenError::Missing {
+            url: Url::parse("https://anonscm.debian.org/repo").unwrap(),
+            description: "Branch does not exist: Not a branch: \"https://anonscm.debian.org/repo\""
+                .to_string(),
+        };
+        let failure =
+            convert_branch_exception(&Url::parse("https://anonscm.debian.org/repo").unwrap(), err);
+        assert_eq!(failure.code, "hosted-on-alioth");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_unavailable_alioth() {
+        let err = BranchOpenError::Unavailable {
+            url: Url::parse("https://anonscm.debian.org/repo").unwrap(),
+            description: "Connection refused".to_string(),
+        };
+        let failure =
+            convert_branch_exception(&Url::parse("https://anonscm.debian.org/repo").unwrap(), err);
+        assert_eq!(failure.code, "hosted-on-alioth");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_unavailable_401() {
+        let err = BranchOpenError::Unavailable {
+            url: Url::parse("https://example.com/repo").unwrap(),
+            description: "Unable to handle http code 401: Unauthorized".to_string(),
+        };
+        let failure =
+            convert_branch_exception(&Url::parse("https://example.com/repo").unwrap(), err);
+        assert_eq!(failure.code, "401-unauthorized");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_unsupported_svn() {
+        let err = BranchOpenError::Unsupported {
+            url: Url::parse("svn://example.com/repo").unwrap(),
+            description: "Unsupported protocol for url svn://example.com/repo".to_string(),
+            vcs: None,
+        };
+        let failure = convert_branch_exception(&Url::parse("svn://example.com/repo").unwrap(), err);
+        assert_eq!(failure.code, "unsupported-vcs-svn");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_temporarily_unavailable() {
+        let err = BranchOpenError::TemporarilyUnavailable {
+            url: Url::parse("https://example.com/repo").unwrap(),
+            description: "Server busy".to_string(),
+        };
+        let failure =
+            convert_branch_exception(&Url::parse("https://example.com/repo").unwrap(), err);
+        assert_eq!(failure.code, "branch-temporarily-unavailable");
+    }
+
+    #[test]
+    fn test_convert_branch_exception_other() {
+        let err = BranchOpenError::Other("something weird".to_string());
+        let failure = convert_branch_exception(&Url::parse("https://example.com").unwrap(), err);
+        assert_eq!(failure.code, "unknown");
+        assert_eq!(failure.description, "something weird");
+    }
+
+    #[test]
+    fn test_get_vcs_managers_simple_url() {
+        let managers = get_vcs_managers("https://vcs.example.com/");
+        assert!(managers.contains_key(&VcsType::Git));
+        assert!(managers.contains_key(&VcsType::Bzr));
+    }
+
+    #[test]
+    fn test_get_vcs_managers_explicit() {
+        let managers =
+            get_vcs_managers("git=https://git.example.com/,bzr=https://bzr.example.com/");
+        assert!(managers.contains_key(&VcsType::Git));
+        assert!(managers.contains_key(&VcsType::Bzr));
+    }
+
+    #[test]
+    fn test_get_vcs_managers_git_only() {
+        let managers = get_vcs_managers("git=https://git.example.com/");
+        assert!(managers.contains_key(&VcsType::Git));
+        assert!(!managers.contains_key(&VcsType::Bzr));
+    }
+
+    #[test]
+    fn test_branch_open_failure_display() {
+        let failure = BranchOpenFailure {
+            code: "branch-missing".to_string(),
+            description: "Not found".to_string(),
+            retry_after: None,
+        };
+        assert_eq!(
+            failure.to_string(),
+            "BranchOpenFailure(code=branch-missing, description=Not found)"
+        );
+
+        let failure_with_retry = BranchOpenFailure {
+            code: "too-many-requests".to_string(),
+            description: "Slow down".to_string(),
+            retry_after: Some(chrono::Duration::seconds(60)),
+        };
+        assert_eq!(
+            failure_with_retry.to_string(),
+            "BranchOpenFailure(code=too-many-requests, description=Slow down, retry_after=PT60S)"
+        );
+    }
+
+    #[test]
+    fn test_remote_git_vcs_manager_diff_url() {
+        let mgr = RemoteGitVcsManager::new(Url::parse("https://vcs.example.com/git/").unwrap());
+        let old = RevisionId::from(b"git-v1:aaaa".to_vec());
+        let new = RevisionId::from(b"git-v1:bbbb".to_vec());
+        let url = mgr.get_diff_url("mycodebase", &old, &new);
+        assert_eq!(
+            url.as_str(),
+            "https://vcs.example.com/git/mycodebase/diff?old=aaaa&new=bbbb"
+        );
+    }
+
+    #[test]
+    fn test_remote_bzr_vcs_manager_branch_url() {
+        let mgr = RemoteBzrVcsManager::new(Url::parse("https://vcs.example.com/bzr/").unwrap());
+        let url = mgr.get_branch_url("mycodebase", "main");
+        assert_eq!(url.as_str(), "https://vcs.example.com/bzr/mycodebase/main");
+    }
+
+    #[test]
+    fn test_remote_bzr_vcs_manager_diff_url() {
+        let mgr = RemoteBzrVcsManager::new(Url::parse("https://vcs.example.com/bzr/").unwrap());
+        let old = RevisionId::from(b"old-revid".to_vec());
+        let new = RevisionId::from(b"new-revid".to_vec());
+        let url = mgr.get_diff_url("mycodebase", &old, &new);
+        assert_eq!(
+            url.as_str(),
+            "https://vcs.example.com/bzr/mycodebase/diff?old=old-revid&new=new-revid"
+        );
+    }
+
+    #[test]
+    fn test_remote_git_vcs_manager_repository_url() {
+        let mgr = RemoteGitVcsManager::new(Url::parse("https://vcs.example.com/git/").unwrap());
+        assert_eq!(
+            mgr.get_repository_url("mycodebase").as_str(),
+            "https://vcs.example.com/git/mycodebase"
+        );
+    }
+
+    #[test]
+    fn test_remote_bzr_vcs_manager_repository_url() {
+        let mgr = RemoteBzrVcsManager::new(Url::parse("https://vcs.example.com/bzr/").unwrap());
+        assert_eq!(
+            mgr.get_repository_url("mycodebase").as_str(),
+            "https://vcs.example.com/bzr/mycodebase"
+        );
     }
 }
 
@@ -351,11 +579,12 @@ impl VcsManager for LocalGitVcsManager {
         branch_name: &str,
     ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
+        let probers = silver_platter::probers::select_probers(Some("git"));
         match silver_platter::vcs::open_branch(
             &url,
             None,
             Some(
-                silver_platter::probers::select_probers(Some("git"))
+                probers
                     .iter()
                     .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
@@ -452,38 +681,43 @@ impl VcsManager for LocalGitVcsManager {
         let repo = self.get_repository(codebase).unwrap().unwrap();
         let old_sha = repo.lookup_bzr_revision_id(old_revid).unwrap().0;
         let new_sha = repo.lookup_bzr_revision_id(new_revid).unwrap().0;
+        let old_sha_str = std::str::from_utf8(&old_sha).unwrap();
+        let new_sha_str = std::str::from_utf8(&new_sha).unwrap();
+        let repo_path = repo.user_transport().local_abspath(Path::new(".")).unwrap();
 
-        // Collect all the info we need from the Python objects before dropping repo
-        let commit_infos: Vec<(Vec<u8>, String)> = Python::attach(|py| {
-            let mut ret = vec![];
-            let git = repo.to_object(py).getattr(py, "_git").unwrap();
-            let walker = git
-                .call_method1(py, "get_walker", (new_sha, old_sha))
-                .unwrap();
+        // Use git log with a format that separates commit hash and message with a NUL byte
+        let output = tokio::process::Command::new("git")
+            .arg("log")
+            .arg("--format=%H%x00%s")
+            .arg(&format!("{}..{}", old_sha_str, new_sha_str))
+            .current_dir(&repo_path)
+            .output()
+            .await
+            .unwrap();
 
-            while let Ok(entry) = walker.call_method0(py, "__next__") {
-                let commit = entry.getattr(py, "commit").unwrap();
-                let commit_id: Vec<u8> = commit.getattr(py, "id").unwrap().extract(py).unwrap();
-                let message = commit.getattr(py, "message").unwrap().to_string();
-                ret.push((commit_id, message));
-            }
-
-            ret
-        });
-
-        // Now convert commit_ids to revision_ids
-        let mut ret = vec![];
-        for (commit_id, message) in commit_infos {
-            let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
-            ret.push(RevisionInfo {
-                commit_id: Some(commit_id),
-                revision_id,
-                message,
-                link: None,
-            });
+        if !output.status.success() {
+            panic!(
+                "git log failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
-        ret
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        stdout
+            .lines()
+            .filter(|line| !line.is_empty())
+            .map(|line| {
+                let (commit_hex, message) = line.split_once('\0').unwrap();
+                let commit_id = commit_hex.as_bytes().to_vec();
+                let revision_id = repo.lookup_foreign_revision_id(&commit_id).unwrap();
+                RevisionInfo {
+                    commit_id: Some(commit_id),
+                    revision_id,
+                    message: message.to_string(),
+                    link: None,
+                }
+            })
+            .collect()
     }
 }
 
@@ -510,11 +744,12 @@ impl VcsManager for LocalBzrVcsManager {
         branch_name: &str,
     ) -> Result<Option<breezyshim::branch::GenericBranch>, BranchOpenError> {
         let url = self.get_branch_url(codebase, branch_name);
+        let probers = silver_platter::probers::select_probers(Some("bzr"));
         match silver_platter::vcs::open_branch(
             &url,
             None,
             Some(
-                silver_platter::probers::select_probers(Some("bzr"))
+                probers
                     .iter()
                     .map(AsRef::as_ref)
                     .collect::<Vec<_>>()
@@ -532,7 +767,10 @@ impl VcsManager for LocalBzrVcsManager {
 
     fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
         let url = Url::from_directory_path(&self.base_path).unwrap();
-        url.join(codebase).unwrap().join(branch_name).unwrap()
+        url.join(&format!("{}/", codebase))
+            .unwrap()
+            .join(branch_name)
+            .unwrap()
     }
 
     fn get_repository(&self, codebase: &str) -> Result<Option<GenericRepository>, BrzError> {
@@ -808,7 +1046,7 @@ impl VcsManager for RemoteBzrVcsManager {
 
     fn get_branch_url(&self, codebase: &str, branch_name: &str) -> Url {
         self.base_url
-            .join(codebase)
+            .join(&format!("{}/", codebase))
             .unwrap()
             .join(branch_name)
             .unwrap()

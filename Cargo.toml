@@ -21,12 +21,11 @@ serde_json = { workspace = true }
 stackdriver_logger = { version = "0.8", optional = true }
 url = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
-pyo3 = { workspace = true }
 silver-platter = { workspace = true }
 tokio = { workspace = true, features = ["process", "rt-multi-thread"] }
 regex = "1.11.0"
 lazy-regex = "3.2.0"
-fancy-regex = "0.17.0"
+fancy-regex = "0.17"
 askama = "0.15"
 futures = "0.3.30"
 sqlx = { workspace = true, features = ["chrono"] }
@@ -49,26 +48,28 @@ shlex.workspace = true
 prometheus = { version = "0.14.0", features = ["reqwest"] }
 buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
+redis = { workspace = true }
+axum = { workspace = true }
 
 [workspace.dependencies]
-rslock = { default-features = false, version = "0.7.3" }
+rslock = { default-features = false, version = "0.7" }
 static_assertions = "1.1.0"
-debian-changelog = "0.2.0"
+debian-changelog = "0.2"
 debian-analyzer = "0.160"
 debversion = { version = "0.5", features = ["serde", "sqlx"] }
-google-cloud-storage = "1.5.0"
-google-cloud-auth = "1.3.0"
+google-cloud-storage = { version = "1.5.0" }
+google-cloud-auth = { version = "1.3.0" }
 google-cloud-gax = "1.4.0"
 bytes = "1"
-tempfile = "3.20.0"
-redis = "1.0.2"
+tempfile = "3"
+redis = "1"
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
-pyo3 = { version = "0.27" }
+pyo3 = { version = "0.28" }
 reqwest = { version = "0.13", features = ["blocking"] }
 pyo3-log = "0.13"
-breezyshim = "0.7.7"
+breezyshim = "0.7"
 #breezyshim = { path = "../breezyshim/trunk" }
 log = "0.4"
 env_logger = ">=0.10"
@@ -78,17 +79,17 @@ url = "2"
 chrono = "0.4"
 clap = { version = "4" }
 tokio = "1"
-axum = "0.8.8"
+axum = "0.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
-silver-platter = { version = "0.8.1" }
-ognibuild = { version = "0.2", features = ["debian"] }
-pyo3-async-runtimes = "0.27"
+silver-platter = { version = "0.8.3" }
+ognibuild = { version = "0.2.11", default-features = false, features = ["debian", "breezy"] }
 shlex = "1"
 buildlog-consultant = "0.1.1"
 deb822-lossless = "0.5.6"
-debian-control = "0.2.15"
+debian-control = "0.3"
 pyo3-filelike = "0.5"
+pyo3-async-runtimes = "0.28"
 
 [build-dependencies]
 protobuf-codegen = "3"

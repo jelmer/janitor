@@ -187,3 +187,248 @@ pub struct PublishNotification {
     )]
     pub publish_delay: Option<Duration>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mode_from_str() {
+        assert_eq!("push".parse::<Mode>().unwrap(), Mode::Push);
+        assert_eq!("propose".parse::<Mode>().unwrap(), Mode::Propose);
+        assert_eq!("push-derived".parse::<Mode>().unwrap(), Mode::PushDerived);
+        assert_eq!("attempt-push".parse::<Mode>().unwrap(), Mode::AttemptPush);
+        assert_eq!("build-only".parse::<Mode>().unwrap(), Mode::BuildOnly);
+        assert_eq!("skip".parse::<Mode>().unwrap(), Mode::Skip);
+        assert_eq!("bts".parse::<Mode>().unwrap(), Mode::Bts);
+        assert!("invalid".parse::<Mode>().is_err());
+    }
+
+    #[test]
+    fn test_mode_display() {
+        assert_eq!(Mode::Push.to_string(), "push");
+        assert_eq!(Mode::Propose.to_string(), "propose");
+        assert_eq!(Mode::PushDerived.to_string(), "push-derived");
+        assert_eq!(Mode::AttemptPush.to_string(), "attempt-push");
+        assert_eq!(Mode::BuildOnly.to_string(), "build-only");
+        assert_eq!(Mode::Skip.to_string(), "skip");
+        assert_eq!(Mode::Bts.to_string(), "bts");
+    }
+
+    #[test]
+    fn test_mode_display_roundtrip() {
+        for mode in [
+            Mode::Push,
+            Mode::Propose,
+            Mode::PushDerived,
+            Mode::AttemptPush,
+            Mode::BuildOnly,
+            Mode::Skip,
+            Mode::Bts,
+        ] {
+            let s = mode.to_string();
+            assert_eq!(s.parse::<Mode>().unwrap(), mode);
+        }
+    }
+
+    #[test]
+    fn test_mode_serde_roundtrip() {
+        for mode in [
+            Mode::Push,
+            Mode::Propose,
+            Mode::PushDerived,
+            Mode::AttemptPush,
+            Mode::BuildOnly,
+            Mode::Skip,
+            Mode::Bts,
+        ] {
+            let json = serde_json::to_string(&mode).unwrap();
+            let roundtripped: Mode = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtripped, mode);
+        }
+    }
+
+    #[test]
+    fn test_mode_serde_values() {
+        assert_eq!(serde_json::to_string(&Mode::Push).unwrap(), r#""push""#);
+        assert_eq!(
+            serde_json::to_string(&Mode::PushDerived).unwrap(),
+            r#""push-derived""#
+        );
+        assert_eq!(
+            serde_json::to_string(&Mode::BuildOnly).unwrap(),
+            r#""build-only""#
+        );
+        assert_eq!(
+            serde_json::to_string(&Mode::AttemptPush).unwrap(),
+            r#""attempt-push""#
+        );
+    }
+
+    #[test]
+    fn test_mode_try_into_silver_platter() {
+        assert_eq!(
+            silver_platter::Mode::try_from(Mode::Push).unwrap(),
+            silver_platter::Mode::Push
+        );
+        assert_eq!(
+            silver_platter::Mode::try_from(Mode::Propose).unwrap(),
+            silver_platter::Mode::Propose
+        );
+        assert_eq!(
+            silver_platter::Mode::try_from(Mode::AttemptPush).unwrap(),
+            silver_platter::Mode::AttemptPush
+        );
+        assert_eq!(
+            silver_platter::Mode::try_from(Mode::PushDerived).unwrap(),
+            silver_platter::Mode::PushDerived
+        );
+        assert!(silver_platter::Mode::try_from(Mode::BuildOnly).is_err());
+        assert!(silver_platter::Mode::try_from(Mode::Skip).is_err());
+        assert!(silver_platter::Mode::try_from(Mode::Bts).is_err());
+    }
+
+    #[test]
+    fn test_merge_proposal_status_from_str() {
+        assert_eq!(
+            "open".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Open
+        );
+        assert_eq!(
+            "merged".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Merged
+        );
+        assert_eq!(
+            "applied".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Applied
+        );
+        assert_eq!(
+            "closed".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Closed
+        );
+        assert_eq!(
+            "abandoned".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Abandoned
+        );
+        assert_eq!(
+            "rejected".parse::<MergeProposalStatus>().unwrap(),
+            MergeProposalStatus::Rejected
+        );
+        assert!("invalid".parse::<MergeProposalStatus>().is_err());
+    }
+
+    #[test]
+    fn test_merge_proposal_status_display_roundtrip() {
+        for status in [
+            MergeProposalStatus::Open,
+            MergeProposalStatus::Merged,
+            MergeProposalStatus::Applied,
+            MergeProposalStatus::Closed,
+            MergeProposalStatus::Abandoned,
+            MergeProposalStatus::Rejected,
+        ] {
+            let s = status.to_string();
+            assert_eq!(s.parse::<MergeProposalStatus>().unwrap(), status);
+        }
+    }
+
+    #[test]
+    fn test_merge_proposal_status_serde_roundtrip() {
+        for status in [
+            MergeProposalStatus::Open,
+            MergeProposalStatus::Merged,
+            MergeProposalStatus::Applied,
+            MergeProposalStatus::Closed,
+            MergeProposalStatus::Abandoned,
+            MergeProposalStatus::Rejected,
+        ] {
+            let json = serde_json::to_string(&status).unwrap();
+            let roundtripped: MergeProposalStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(roundtripped, status);
+        }
+    }
+
+    #[test]
+    fn test_merge_proposal_status_from_breezyshim() {
+        assert_eq!(
+            MergeProposalStatus::from(breezyshim::forge::MergeProposalStatus::Open),
+            MergeProposalStatus::Open
+        );
+        assert_eq!(
+            MergeProposalStatus::from(breezyshim::forge::MergeProposalStatus::Merged),
+            MergeProposalStatus::Merged
+        );
+        assert_eq!(
+            MergeProposalStatus::from(breezyshim::forge::MergeProposalStatus::Closed),
+            MergeProposalStatus::Closed
+        );
+    }
+
+    #[test]
+    fn test_publish_notification_serde() {
+        let notification = PublishNotification {
+            id: "pub-123".to_string(),
+            codebase: "mycodebase".to_string(),
+            campaign: "lintian-fixes".to_string(),
+            proposal_url: Some(
+                Url::parse("https://salsa.debian.org/foo/bar/-/merge_requests/1").unwrap(),
+            ),
+            mode: Mode::Propose,
+            main_branch_url: Some(Url::parse("https://salsa.debian.org/foo/bar").unwrap()),
+            main_branch_web_url: None,
+            branch_name: Some("lintian-fixes".to_string()),
+            result_code: "success".to_string(),
+            result: serde_json::json!({"key": "value"}),
+            run_id: "run-456".to_string(),
+            publish_delay: Some(Duration::seconds(3600)),
+        };
+        let json = serde_json::to_string(&notification).unwrap();
+        let roundtripped: PublishNotification = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.id, "pub-123");
+        assert_eq!(roundtripped.mode, Mode::Propose);
+        assert_eq!(roundtripped.publish_delay, Some(Duration::seconds(3600)));
+    }
+
+    #[test]
+    fn test_publish_notification_null_delay() {
+        let json = r#"{
+            "id": "pub-1",
+            "codebase": "test",
+            "campaign": "test-campaign",
+            "proposal_url": null,
+            "mode": "push",
+            "main_branch_url": null,
+            "main_branch_web_url": null,
+            "branch_name": null,
+            "result_code": "success",
+            "result": {},
+            "run_id": "run-1",
+            "publish_delay": null
+        }"#;
+        let notification: PublishNotification = serde_json::from_str(json).unwrap();
+        assert_eq!(notification.publish_delay, None);
+        assert_eq!(notification.mode, Mode::Push);
+    }
+
+    #[test]
+    fn test_merge_proposal_notification_serde() {
+        let notification = MergeProposalNotification {
+            url: Url::parse("https://github.com/foo/bar/pull/1").unwrap(),
+            web_url: Some(Url::parse("https://github.com/foo/bar/pull/1").unwrap()),
+            rate_limit_bucket: Some("github".to_string()),
+            status: MergeProposalStatus::Open,
+            merged_by: None,
+            merged_by_url: None,
+            merged_at: None,
+            codebase: "mycodebase".to_string(),
+            campaign: "lintian-fixes".to_string(),
+            target_branch_url: Url::parse("https://github.com/foo/bar").unwrap(),
+            target_branch_web_url: None,
+        };
+        let json = serde_json::to_string(&notification).unwrap();
+        let roundtripped: MergeProposalNotification = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.status, MergeProposalStatus::Open);
+        assert_eq!(roundtripped.codebase, "mycodebase");
+        assert_eq!(roundtripped.rate_limit_bucket, Some("github".to_string()));
+    }
+}

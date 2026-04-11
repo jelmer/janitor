@@ -122,3 +122,119 @@ async fn iter_publishable_suites(
 
     Ok(rows.into_iter().map(|row| row.0).collect::<Vec<_>>())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+
+    fn make_run() -> Run {
+        Run {
+            id: "run-123".to_string(),
+            command: "lintian-brush".to_string(),
+            description: Some("Fixed lintian issues".to_string()),
+            result_code: "success".to_string(),
+            main_branch_revision: Some(RevisionId::from(b"main-rev".to_vec())),
+            revision: Some(RevisionId::from(b"new-rev".to_vec())),
+            context: Some("context-data".to_string()),
+            result: Some(serde_json::json!({"applied": 3})),
+            suite: "lintian-fixes".to_string(),
+            instigated_context: None,
+            vcs_type: "git".to_string(),
+            branch_url: "https://salsa.debian.org/foo/bar".to_string(),
+            logfilenames: Some(vec!["build.log".to_string(), "worker.log".to_string()]),
+            worker_name: Some("worker-1".to_string()),
+            result_branches: Some(vec![
+                (
+                    "main".to_string(),
+                    "refs/heads/lintian-fixes".to_string(),
+                    Some(RevisionId::from(b"base-rev".to_vec())),
+                    Some(RevisionId::from(b"tip-rev".to_vec())),
+                ),
+                (
+                    "debian".to_string(),
+                    "refs/heads/debian".to_string(),
+                    None,
+                    None,
+                ),
+            ]),
+            result_tags: Some(vec![("v1.0".to_string(), "tag-ref".to_string())]),
+            target_branch_url: Some("https://salsa.debian.org/foo/bar".to_string()),
+            change_set: "cs-1".to_string(),
+            failure_details: None,
+            failure_transient: None,
+            failure_stage: None,
+            codebase: "mycodebase".to_string(),
+            start_time: chrono::Utc.with_ymd_and_hms(2025, 1, 1, 10, 0, 0).unwrap(),
+            finish_time: chrono::Utc.with_ymd_and_hms(2025, 1, 1, 10, 5, 0).unwrap(),
+            value: Some(30),
+        }
+    }
+
+    #[test]
+    fn test_run_duration() {
+        let run = make_run();
+        assert_eq!(run.duration(), chrono::Duration::minutes(5));
+    }
+
+    #[test]
+    fn test_run_get_result_branch_found() {
+        let run = make_run();
+        let (name, rev, base_rev) = run.get_result_branch("main").unwrap();
+        assert_eq!(name, "refs/heads/lintian-fixes");
+        assert_eq!(rev, Some(RevisionId::from(b"tip-rev".to_vec())));
+        assert_eq!(base_rev, Some(RevisionId::from(b"base-rev".to_vec())));
+    }
+
+    #[test]
+    fn test_run_get_result_branch_not_found() {
+        let run = make_run();
+        assert!(run.get_result_branch("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_run_get_result_branch_no_branches() {
+        let mut run = make_run();
+        run.result_branches = None;
+        assert!(run.get_result_branch("main").is_none());
+    }
+
+    #[test]
+    fn test_run_get_result_branch_no_revisions() {
+        let run = make_run();
+        let (name, rev, base_rev) = run.get_result_branch("debian").unwrap();
+        assert_eq!(name, "refs/heads/debian");
+        assert_eq!(rev, None);
+        assert_eq!(base_rev, None);
+    }
+
+    #[test]
+    fn test_run_equality() {
+        let run1 = make_run();
+        let mut run2 = make_run();
+        // Same id = equal
+        assert_eq!(run1, run2);
+
+        // Different id = not equal
+        run2.id = "run-456".to_string();
+        assert_ne!(run1, run2);
+    }
+
+    #[test]
+    fn test_run_equality_ignores_other_fields() {
+        let run1 = make_run();
+        let mut run2 = make_run();
+        run2.command = "different-command".to_string();
+        run2.result_code = "failure".to_string();
+        run2.value = Some(999);
+        // Still equal because id is the same
+        assert_eq!(run1, run2);
+    }
+
+    #[test]
+    fn test_run_zero_duration() {
+        let mut run = make_run();
+        run.finish_time = run.start_time;
+        assert_eq!(run.duration(), chrono::Duration::zero());
+    }
+}

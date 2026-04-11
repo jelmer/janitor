@@ -100,7 +100,7 @@ pub(crate) fn build(
                     details: None,
                 })?;
                 let packaging_context = ognibuild::debian::context::DebianPackagingContext::new(
-                    cloned_tree,
+                    Clone::clone(local_tree),
                     subpath,
                     committer.map(breezyshim::config::parse_username),
                     update_changelog == crate::debian::DebUpdateChangelog::Update,

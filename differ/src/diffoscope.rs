@@ -331,7 +331,7 @@ pub fn format_diffoscope(
         return Ok(serde_json::to_string(diff).unwrap());
     }
 
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         let m = py.import("diffoscope.readers.json")?;
         let reader = m.getattr("JSONReaderV1")?.call0()?;
 
@@ -383,7 +383,7 @@ pub fn format_diffoscope(
                     } else {
                         "".to_string()
                     };
-                    Python::with_gil(|py| println_out.call_method1(py, "append", (s,)))?;
+                    Python::attach(|py| println_out.call_method1(py, "append", (s,)))?;
                     Ok(())
                 };
 

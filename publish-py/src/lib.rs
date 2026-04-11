@@ -109,7 +109,7 @@ impl RateLimiter {
                 open_mps,
                 max_open_mps,
             } => {
-                let e = Python::with_gil(|py| {
+                let e = Python::attach(|py| {
                     Py::new(py, BucketRateLimited::new(bucket, open_mps, max_open_mps)).unwrap()
                 });
                 Err(PyErr::new::<BucketRateLimited, _>(e))

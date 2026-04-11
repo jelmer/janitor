@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use breezyshim::branch::Branch;
+use breezyshim::branch::GenericBranch;
 use debversion::Version;
 use janitor::api::worker::LintianConfig;
 use janitor::config::{Campaign, Distribution};
@@ -72,10 +72,8 @@ pub trait ConfigGenerator {
     ) -> Result<HashMap<String, String>, Error>;
 
     /// Get additional branches that should be colocated with the main branch.
-    fn additional_colocated_branches(
-        &self,
-        main_branch: &breezyshim::branch::GenericBranch,
-    ) -> HashMap<String, String>;
+    fn additional_colocated_branches(&self, main_branch: &GenericBranch)
+        -> HashMap<String, String>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -140,7 +138,7 @@ impl ConfigGenerator for GenericConfigGenerator {
 
     fn additional_colocated_branches(
         &self,
-        _main_branch: &breezyshim::branch::GenericBranch,
+        _main_branch: &GenericBranch,
     ) -> HashMap<String, String> {
         HashMap::new()
     }
@@ -389,7 +387,7 @@ impl ConfigGenerator for DebianConfigGenerator {
 
     fn additional_colocated_branches(
         &self,
-        main_branch: &breezyshim::branch::GenericBranch,
+        main_branch: &GenericBranch,
     ) -> HashMap<String, String> {
         silver_platter::debian::pick_additional_colocated_branches(main_branch)
     }

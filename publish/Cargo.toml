@@ -13,11 +13,10 @@ axum = { workspace = true }
 breezyshim = { workspace = true, features = ["sqlx"] }
 chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
-debian-changelog = "0.2.0"
+debian-changelog = { workspace = true }
 janitor = { path = ".." }
 log.workspace = true
 minijinja = { version = "2", features = ["loader"] }
-pyo3.workspace = true
 redis = { workspace = true, features = ["tokio-comp", "json", "connection-manager"] }
 rslock = { workspace = true, default-features = false, features = ["tokio-comp"] }
 reqwest.workspace = true
@@ -33,3 +32,4 @@ prometheus = "0.14.0"
 
 [dev-dependencies]
 maplit = { workspace = true }
+protobuf = "3"

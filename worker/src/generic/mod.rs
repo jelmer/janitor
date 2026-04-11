@@ -1,5 +1,4 @@
 use crate::{convert_codemod_script_failed, WorkerFailure};
-use breezyshim::tree::WorkingTree;
 use janitor::api::worker::GenericBuildConfig;
 use ognibuild::analyze::AnalyzedError;
 use ognibuild::installer::Error as InstallerError;

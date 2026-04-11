@@ -145,3 +145,236 @@ impl LogFileManager for FileSystemLogFileManager {
         Err(Error::NotFound)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::logs::LogFileManager;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, FileSystemLogFileManager) {
+        let td = TempDir::new().unwrap();
+        let mgr = FileSystemLogFileManager::new(td.path().to_path_buf());
+        (td, mgr)
+    }
+
+    #[tokio::test]
+    async fn test_has_log_not_found() {
+        let (_td, mgr) = setup();
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "build.log").await.unwrap(),
+            false
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_log_not_found() {
+        let (_td, mgr) = setup();
+        let result = mgr.get_log("codebase", "run-1", "build.log").await;
+        assert!(matches!(result, Err(Error::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_import_and_has_log() {
+        let (_td, mgr) = setup();
+
+        // Create a source log file
+        let source_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path().join("build.log");
+        std::fs::write(&source_path, "some log content\n").unwrap();
+
+        mgr.import_log(
+            "codebase",
+            "run-1",
+            source_path.to_str().unwrap(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "build.log").await.unwrap(),
+            true
+        );
+    }
+
+    #[tokio::test]
+    async fn test_import_and_get_log() {
+        let (_td, mgr) = setup();
+
+        let source_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path().join("build.log");
+        std::fs::write(&source_path, "log line 1\nlog line 2\n").unwrap();
+
+        mgr.import_log(
+            "codebase",
+            "run-1",
+            source_path.to_str().unwrap(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let mut reader = mgr.get_log("codebase", "run-1", "build.log").await.unwrap();
+        let mut content = String::new();
+        reader.read_to_string(&mut content).unwrap();
+        assert_eq!(content, "log line 1\nlog line 2\n");
+    }
+
+    #[tokio::test]
+    async fn test_import_with_custom_basename() {
+        let (_td, mgr) = setup();
+
+        let source_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path().join("original.log");
+        std::fs::write(&source_path, "content").unwrap();
+
+        mgr.import_log(
+            "codebase",
+            "run-1",
+            source_path.to_str().unwrap(),
+            None,
+            Some("renamed.log"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "renamed.log")
+                .await
+                .unwrap(),
+            true
+        );
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "original.log")
+                .await
+                .unwrap(),
+            false
+        );
+    }
+
+    #[tokio::test]
+    async fn test_import_with_mtime() {
+        let (_td, mgr) = setup();
+
+        let source_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path().join("build.log");
+        std::fs::write(&source_path, "content").unwrap();
+
+        let mtime = chrono::DateTime::from_timestamp(1700000000, 0).unwrap();
+        mgr.import_log(
+            "codebase",
+            "run-1",
+            source_path.to_str().unwrap(),
+            Some(mtime),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "build.log").await.unwrap(),
+            true
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_ctime() {
+        let (_td, mgr) = setup();
+
+        let source_dir = TempDir::new().unwrap();
+        let source_path = source_dir.path().join("build.log");
+        std::fs::write(&source_path, "content").unwrap();
+
+        mgr.import_log(
+            "codebase",
+            "run-1",
+            source_path.to_str().unwrap(),
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let ctime = mgr
+            .get_ctime("codebase", "run-1", "build.log")
+            .await
+            .unwrap();
+        // ctime should be recent (within the last minute)
+        let now = Utc::now();
+        let diff = now - ctime;
+        assert!(diff.num_seconds() >= 0);
+        assert!(diff.num_seconds() < 60);
+    }
+
+    #[tokio::test]
+    async fn test_get_ctime_not_found() {
+        let (_td, mgr) = setup();
+        let result = mgr.get_ctime("codebase", "run-1", "build.log").await;
+        assert!(matches!(result, Err(Error::NotFound)));
+    }
+
+    #[tokio::test]
+    async fn test_iter_logs() {
+        let (_td, mgr) = setup();
+
+        let source_dir = TempDir::new().unwrap();
+        let source1 = source_dir.path().join("build.log");
+        std::fs::write(&source1, "content1").unwrap();
+        let source2 = source_dir.path().join("worker.log");
+        std::fs::write(&source2, "content2").unwrap();
+
+        mgr.import_log("codebase-a", "run-1", source1.to_str().unwrap(), None, None)
+            .await
+            .unwrap();
+        mgr.import_log("codebase-a", "run-1", source2.to_str().unwrap(), None, None)
+            .await
+            .unwrap();
+        mgr.import_log("codebase-b", "run-2", source1.to_str().unwrap(), None, None)
+            .await
+            .unwrap();
+
+        let mut logs: Vec<(String, String, Vec<String>)> = mgr.iter_logs().await.collect();
+        logs.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+
+        assert_eq!(logs.len(), 2);
+        assert_eq!(logs[0].0, "codebase-a");
+        assert_eq!(logs[0].1, "run-1");
+        let mut names = logs[0].2.clone();
+        names.sort();
+        assert_eq!(names, vec!["build.log", "worker.log"]);
+
+        assert_eq!(logs[1].0, "codebase-b");
+        assert_eq!(logs[1].1, "run-2");
+        assert_eq!(logs[1].2, vec!["build.log"]);
+    }
+
+    #[tokio::test]
+    async fn test_iter_logs_empty() {
+        let (_td, mgr) = setup();
+        let logs: Vec<_> = mgr.iter_logs().await.collect();
+        assert_eq!(logs.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_path_traversal_rejected() {
+        let (_td, mgr) = setup();
+        // Paths containing '/' should return empty paths list
+        assert_eq!(
+            mgr.has_log("code/base", "run-1", "build.log")
+                .await
+                .unwrap(),
+            false
+        );
+        assert_eq!(
+            mgr.has_log("codebase", "run/1", "build.log").await.unwrap(),
+            false
+        );
+        assert_eq!(
+            mgr.has_log("codebase", "run-1", "build/log").await.unwrap(),
+            false
+        );
+    }
+}

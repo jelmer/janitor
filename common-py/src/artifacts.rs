@@ -104,7 +104,7 @@ impl ArtifactManager {
         py: Python<'a>,
         run_id: &str,
         local_path: &str,
-        filter_fn: Option<PyObject>,
+        filter_fn: Option<Py<PyAny>>,
     ) -> PyResult<Bound<'a, PyAny>> {
         let run_id = run_id.to_string();
         let local_path = std::path::PathBuf::from(local_path);
@@ -112,7 +112,7 @@ impl ArtifactManager {
         let filter_fn: Option<Box<dyn Fn(&str) -> bool + Sync + Send>> = filter_fn.map(|f| {
             Box::new({
                 move |x: &str| -> bool {
-                    Python::with_gil(|py| {
+                    Python::attach(|py| {
                         let r = f.call1(py, (x,))?;
                         Ok::<bool, PyErr>(r.is_truthy(py)?)
                     })
@@ -135,9 +135,9 @@ impl ArtifactManager {
     fn __aexit__<'a>(
         &self,
         py: Python<'a>,
-        _exc_type: PyObject,
-        _exc_value: PyObject,
-        _traceback: PyObject,
+        _exc_type: Py<PyAny>,
+        _exc_value: Py<PyAny>,
+        _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'a, PyAny>> {
         let none = py.None();
         pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(none) })
