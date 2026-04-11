@@ -51,7 +51,7 @@ fn run_debdiff<'a>(
         .await
         .map_err(|e| DebdiffError::new_err((e.to_string(),)))?;
 
-        Ok(Python::with_gil(|py| PyBytes::new(py, &r).unbind()))
+        Ok(Python::attach(|py| PyBytes::new(py, &r).unbind()))
     })
 }
 

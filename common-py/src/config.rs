@@ -258,7 +258,7 @@ impl Campaign {
     }
 
     #[getter]
-    pub fn build(&self, py: Python) -> PyResult<Option<PyObject>> {
+    pub fn build(&self, py: Python) -> PyResult<Option<Py<PyAny>>> {
         match self.0.build.as_ref() {
             Some(janitor::config::config::campaign::Build::DebianBuild(d)) => {
                 Ok(Some(Py::new(py, DebianBuild(d.clone()))?.into_any()))
@@ -464,7 +464,7 @@ pub fn read_string(s: &str) -> PyResult<Config> {
 }
 
 #[pyfunction]
-pub fn read_config(f: PyObject) -> PyResult<Config> {
+pub fn read_config(f: Py<PyAny>) -> PyResult<Config> {
     let f = pyo3_filelike::PyTextFile::from(f);
     let config =
         janitor::config::read_readable(f).map_err(|e| PyValueError::new_err(e.to_string()))?;

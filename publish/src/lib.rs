@@ -948,6 +948,7 @@ mod tests {
             command: "lintian-brush".to_string(),
             external_url: None,
             derived_owner: None,
+            auto_merge: None,
         };
         let json = serde_json::to_string(&request).unwrap();
         let roundtripped: PublishOneRequest = serde_json::from_str(&json).unwrap();

@@ -64,7 +64,7 @@ impl VcsManager {
         let z = self.0.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let diff = z.get_diff(&codebase, &old_revid, &new_revid).await;
-            Ok(Python::with_gil(|py| PyBytes::new(py, &diff).unbind()))
+            Ok(Python::attach(|py| PyBytes::new(py, &diff).unbind()))
         })
     }
 
@@ -256,7 +256,7 @@ impl RemoteBzrVcsManager {
 }
 
 #[pyfunction]
-pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyResult<PyObject> {
+pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyResult<Py<PyAny>> {
     match name {
         "bzr" => Ok(Py::new(py, LocalBzrVcsManager::new(location).unwrap())?.into_any()),
         "git" => Ok(Py::new(py, LocalGitVcsManager::new(location).unwrap())?.into_any()),
@@ -270,7 +270,7 @@ pub fn get_local_vcs_manager(py: Python, name: &str, location: PathBuf) -> PyRes
 }
 
 #[pyfunction]
-pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObject> {
+pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<Py<PyAny>> {
     match name {
         "bzr" => Ok(Py::new(py, RemoteBzrVcsManager::new(location).unwrap())?.into_any()),
         "git" => Ok(Py::new(py, RemoteGitVcsManager::new(location).unwrap())?.into_any()),
@@ -284,7 +284,7 @@ pub fn get_remote_vcs_manager(py: Python, name: &str, location: &str) -> PyResul
 }
 
 #[pyfunction]
-pub fn get_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObject> {
+pub fn get_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<Py<PyAny>> {
     if !location.contains(':') {
         get_local_vcs_manager(py, name, PathBuf::from(location))
     } else {
@@ -293,7 +293,7 @@ pub fn get_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<PyObj
 }
 
 #[pyfunction]
-pub fn get_vcs_managers(py: Python, location: &str) -> PyResult<HashMap<String, PyObject>> {
+pub fn get_vcs_managers(py: Python, location: &str) -> PyResult<HashMap<String, Py<PyAny>>> {
     if !location.contains('=') {
         Ok(maplit::hashmap! {
             "bzr".to_string() => get_vcs_manager(py, "bzr", &(location.trim_end_matches('/').to_owned() + "/bzr")).unwrap(),
@@ -321,8 +321,8 @@ create_exception!(janitor.vcs, UnsupportedVcs, pyo3::exceptions::PyException);
 #[pyo3(signature = (vcs_url, possible_transports=None, probers=None))]
 pub fn open_branch_ext(
     vcs_url: &str,
-    possible_transports: Option<Vec<PyObject>>,
-    probers: Option<Vec<PyObject>>,
+    possible_transports: Option<Vec<Py<PyAny>>>,
+    probers: Option<Vec<Py<PyAny>>>,
 ) -> Result<breezyshim::branch::GenericBranch, PyErr> {
     let vcs_url = url::Url::parse(vcs_url).map_err(|e| PyValueError::new_err(format!("{}", e)))?;
     // TODO: support possible_transports

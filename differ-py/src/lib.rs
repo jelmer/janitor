@@ -39,7 +39,7 @@ fn run_diffoscope<'a>(
                 PyValueError::new_err(e.to_string())
             }
         })?;
-        Ok(Python::with_gil(|py| {
+        Ok(Python::attach(|py| {
             pythonize::pythonize(py, &o).unwrap().unbind()
         }))
     })

@@ -22,7 +22,7 @@ breezyshim.workspace = true
 silver-platter = { workspace = true, features = ["debian"] }
 janitor-differ = { path = "../differ" }
 pyo3-async-runtimes = { workspace = true, features = ["tokio-runtime"] }
-pythonize = "0.27"
+pythonize = "0.28"
 serde_json.workspace = true
 
 [features]

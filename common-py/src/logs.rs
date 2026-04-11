@@ -97,7 +97,7 @@ impl LogFileManager {
                 f.await
             };
             r.map_err(|e| convert_logs_error_to_py(e))?;
-            Ok(Python::with_gil(|py| py.None()))
+            Ok(Python::attach(|py| py.None()))
         })
     }
 
@@ -125,9 +125,9 @@ impl LogFileManager {
     fn __aexit__<'a>(
         &self,
         py: Python<'a>,
-        _exc_type: PyObject,
-        _exc_value: PyObject,
-        _traceback: PyObject,
+        _exc_type: Py<PyAny>,
+        _exc_value: Py<PyAny>,
+        _traceback: Py<PyAny>,
     ) -> PyResult<Bound<'a, PyAny>> {
         let none = py.None();
         pyo3_async_runtimes::tokio::future_into_py(py, async move { Ok(none) })
@@ -139,7 +139,7 @@ impl LogFileManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let r = z.iter_logs().await.collect::<Vec<_>>();
 
-            Python::with_gil(|py| -> PyResult<PyObject> {
+            Python::attach(|py| -> PyResult<Py<PyAny>> {
                 let list = pyo3::types::PyList::empty(py);
                 for (codebase, run_id, name) in r {
                     list.append((codebase, run_id, name))?;

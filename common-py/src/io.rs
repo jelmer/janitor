@@ -15,7 +15,7 @@ impl Readable {
 #[pymethods]
 impl Readable {
     #[pyo3(signature = (size=None))]
-    fn read(&mut self, py: Python, size: Option<usize>) -> PyResult<PyObject> {
+    fn read(&mut self, py: Python, size: Option<usize>) -> PyResult<Py<PyAny>> {
         let mut buf = vec![0; size.unwrap_or(4096)];
         let n = self
             .0

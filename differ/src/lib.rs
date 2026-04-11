@@ -32,34 +32,31 @@ pub fn find_binaries(path: &Path) -> impl Iterator<Item = (OsString, PathBuf)> {
 ///
 /// # Returns
 /// `true` if the file is a binary package, `false` otherwise
-pub fn is_binary(name: &OsStr) -> bool {
-    name.to_str().map_or(false, |name| {
-        name.ends_with(".deb") || name.ends_with(".udeb")
-    })
+pub fn is_binary(name: &str) -> bool {
+    name.ends_with(".deb") || name.ends_with(".udeb")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::OsStr;
     use tempfile::TempDir;
 
     #[test]
     fn test_is_binary_deb() {
-        assert_eq!(is_binary(OsStr::new("package_1.0_amd64.deb")), true);
+        assert_eq!(is_binary("package_1.0_amd64.deb"), true);
     }
 
     #[test]
     fn test_is_binary_udeb() {
-        assert_eq!(is_binary(OsStr::new("package_1.0_amd64.udeb")), true);
+        assert_eq!(is_binary("package_1.0_amd64.udeb"), true);
     }
 
     #[test]
     fn test_is_binary_not_binary() {
-        assert_eq!(is_binary(OsStr::new("package_1.0.dsc")), false);
-        assert_eq!(is_binary(OsStr::new("package_1.0.tar.gz")), false);
-        assert_eq!(is_binary(OsStr::new("package_1.0.changes")), false);
-        assert_eq!(is_binary(OsStr::new("Makefile")), false);
+        assert_eq!(is_binary("package_1.0.dsc"), false);
+        assert_eq!(is_binary("package_1.0.tar.gz"), false);
+        assert_eq!(is_binary("package_1.0.changes"), false);
+        assert_eq!(is_binary("Makefile"), false);
     }
 
     #[test]
