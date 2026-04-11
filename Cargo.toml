@@ -50,7 +50,6 @@ buildlog-consultant = { workspace = true }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
-base64 = "0.22"
 redis = { workspace = true }
 axum = { workspace = true }
 rand = "0.9"
@@ -66,7 +65,7 @@ google-cloud-auth = { version = "1.3.0" }
 google-cloud-gax = "1.4.0"
 bytes = "1"
 tempfile = "3"
-redis = "1"
+redis = { version = "1", features = ["aio", "connection-manager", "tokio-comp"] }
 sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
