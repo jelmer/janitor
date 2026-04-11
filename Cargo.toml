@@ -53,6 +53,8 @@ tracing-appender = "0.2"
 base64 = "0.22"
 redis = { workspace = true }
 axum = { workspace = true }
+rand = "0.9"
+base64 = "0.22"
 
 [workspace.dependencies]
 rslock = { default-features = false, version = "0.7" }
