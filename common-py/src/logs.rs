@@ -47,7 +47,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| convert_logs_error_to_py(e))
+            r.map_err(convert_logs_error_to_py)
         })
     }
 
@@ -70,7 +70,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            let readable = r.map_err(|e| convert_logs_error_to_py(e))?;
+            let readable = r.map_err(convert_logs_error_to_py)?;
             Ok(Readable::new(readable))
         })
     }
@@ -96,7 +96,7 @@ impl LogFileManager {
             } else {
                 f.await
             };
-            r.map_err(|e| convert_logs_error_to_py(e))?;
+            r.map_err(convert_logs_error_to_py)?;
             Ok(Python::attach(|py| py.None()))
         })
     }
@@ -113,7 +113,7 @@ impl LogFileManager {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             z.get_ctime(&codebase, &run_id, &name)
                 .await
-                .map_err(|e| convert_logs_error_to_py(e))
+                .map_err(convert_logs_error_to_py)
         })
     }
 

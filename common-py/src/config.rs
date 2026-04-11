@@ -1,6 +1,5 @@
 use pyo3::exceptions::{PyKeyError, PyValueError};
 use pyo3::prelude::*;
-use std::path::{Path, PathBuf};
 
 #[pyclass]
 pub struct Config(pub(crate) janitor::config::Config);
@@ -481,7 +480,7 @@ pub fn get_distribution(config: &Config, distribution: &str) -> PyResult<Distrib
     config.find_distribution(distribution)
 }
 
-pub(crate) fn init(py: Python, module: &Bound<PyModule>) -> PyResult<()> {
+pub(crate) fn init(_py: Python, module: &Bound<PyModule>) -> PyResult<()> {
     module.add_class::<Config>()?;
     module.add_class::<Campaign>()?;
     module.add_class::<AptRepository>()?;
