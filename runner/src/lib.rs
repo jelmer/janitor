@@ -406,4 +406,194 @@ mod tests {
         let vendor = dpkg_vendor();
         assert!(vendor.is_some());
     }
+
+    #[test]
+    fn test_committer_env_name_only() {
+        // Committer with name but no email
+        let env = committer_env(Some("John Doe"));
+        assert_eq!(env.get("DEBFULLNAME"), Some(&"John Doe".to_string()));
+        assert_eq!(env.get("COMMITTER"), Some(&"John Doe".to_string()));
+        assert_eq!(env.get("BRZ_EMAIL"), Some(&"John Doe".to_string()));
+    }
+
+    #[test]
+    fn test_is_log_filename_extensions() {
+        // Standard .log files
+        assert!(is_log_filename("build.log"));
+        assert!(is_log_filename("worker.log"));
+        assert!(is_log_filename("a.log"));
+
+        // Rotated logs
+        assert!(is_log_filename("build.log.1"));
+        assert!(is_log_filename("build.log.42"));
+
+        // Nested number format (e.g., build.1.log)
+        assert!(is_log_filename("build.1.log"));
+
+        // Not log files
+        assert!(!is_log_filename("build.txt"));
+        assert!(!is_log_filename("build.log.bak"));
+        assert!(!is_log_filename("build"));
+        // ".log" has extension "log", so it is treated as a log file
+        assert!(is_log_filename(".log"));
+    }
+
+    #[test]
+    fn test_gather_logs_with_files() {
+        let td = tempfile::tempdir().unwrap();
+        // gather_logs looks for *directories* that match is_log_filename
+        std::fs::create_dir(td.path().join("build.log")).unwrap();
+        std::fs::create_dir(td.path().join("worker.log")).unwrap();
+        std::fs::create_dir(td.path().join("not-a-log")).unwrap();
+        // Regular file should be ignored
+        std::fs::write(td.path().join("output.log"), "content").unwrap();
+
+        let logs: Vec<_> = gather_logs(td.path()).collect();
+        let mut names: Vec<String> = logs
+            .iter()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        names.sort();
+        assert_eq!(names, vec!["build.log", "worker.log"]);
+    }
+
+    #[test]
+    fn test_gather_logs_empty_directory() {
+        let td = tempfile::tempdir().unwrap();
+        let logs: Vec<_> = gather_logs(td.path()).collect();
+        assert_eq!(logs.len(), 0);
+    }
+
+    #[test]
+    fn test_janitor_result_serde() {
+        let result = JanitorResult {
+            log_id: "log-123".to_string(),
+            branch_url: url::Url::parse("https://example.com/repo").unwrap(),
+            subpath: Some("debian/".to_string()),
+            code: "success".to_string(),
+            transient: Some(false),
+            codebase: "mycodebase".to_string(),
+            campaign: "lintian-fixes".to_string(),
+            description: "Fixed 3 lintian issues".to_string(),
+            codemod: serde_json::json!({"applied": 3}),
+            value: Some(30),
+            logfilenames: vec!["build.log".to_string(), "worker.log".to_string()],
+            start_time: chrono::Utc::now(),
+            finish_time: chrono::Utc::now(),
+            duration: std::time::Duration::from_secs(120),
+            revision: Some(breezyshim::RevisionId::from(b"rev-1".to_vec())),
+            main_branch_revision: Some(breezyshim::RevisionId::from(b"rev-0".to_vec())),
+            change_set: Some("cs-1".to_string()),
+            tags: None,
+            remotes: None,
+            branches: None,
+            failure_details: None,
+            failure_stage: None,
+            resume: None,
+            target: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let roundtripped: JanitorResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.log_id, "log-123");
+        assert_eq!(roundtripped.code, "success");
+        assert_eq!(roundtripped.codebase, "mycodebase");
+        assert_eq!(roundtripped.campaign, "lintian-fixes");
+        assert_eq!(roundtripped.value, Some(30));
+        assert_eq!(roundtripped.logfilenames, vec!["build.log", "worker.log"]);
+    }
+
+    #[test]
+    fn test_janitor_result_with_failure() {
+        let result = JanitorResult {
+            log_id: "log-456".to_string(),
+            branch_url: url::Url::parse("https://example.com/repo").unwrap(),
+            subpath: None,
+            code: "build-failed".to_string(),
+            transient: Some(true),
+            codebase: "failcodebase".to_string(),
+            campaign: "fresh-releases".to_string(),
+            description: "Build failed".to_string(),
+            codemod: serde_json::json!(null),
+            value: None,
+            logfilenames: vec![],
+            start_time: chrono::Utc::now(),
+            finish_time: chrono::Utc::now(),
+            duration: std::time::Duration::from_secs(30),
+            revision: None,
+            main_branch_revision: None,
+            change_set: None,
+            tags: None,
+            remotes: None,
+            branches: None,
+            failure_details: Some(serde_json::json!({"error": "compilation failed"})),
+            failure_stage: Some(vec!["build".to_string()]),
+            resume: None,
+            target: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let roundtripped: JanitorResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.code, "build-failed");
+        assert_eq!(roundtripped.transient, Some(true));
+        assert!(roundtripped.failure_details.is_some());
+        assert_eq!(roundtripped.failure_stage, Some(vec!["build".to_string()]));
+    }
+
+    #[test]
+    fn test_janitor_result_with_resume() {
+        let result = JanitorResult {
+            log_id: "log-789".to_string(),
+            branch_url: url::Url::parse("https://example.com/repo").unwrap(),
+            subpath: None,
+            code: "success".to_string(),
+            transient: None,
+            codebase: "test".to_string(),
+            campaign: "test".to_string(),
+            description: "OK".to_string(),
+            codemod: serde_json::json!({}),
+            value: None,
+            logfilenames: vec![],
+            start_time: chrono::Utc::now(),
+            finish_time: chrono::Utc::now(),
+            duration: std::time::Duration::from_secs(10),
+            revision: None,
+            main_branch_revision: None,
+            change_set: None,
+            tags: None,
+            remotes: Some(maplit::hashmap! {
+                "origin".to_string() => ResultRemote {
+                    url: url::Url::parse("https://example.com/origin").unwrap(),
+                }
+            }),
+            branches: Some(vec![(
+                "main".to_string(),
+                "refs/heads/main".to_string(),
+                None,
+                None,
+            )]),
+            failure_details: None,
+            failure_stage: None,
+            resume: Some(ResultResume {
+                run_id: "prev-run".to_string(),
+            }),
+            target: Some(ResultTarget {
+                name: "debian".to_string(),
+                details: serde_json::json!({"dist": "unstable"}),
+            }),
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let roundtripped: JanitorResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.resume.as_ref().unwrap().run_id, "prev-run");
+        assert_eq!(roundtripped.target.as_ref().unwrap().name, "debian");
+        assert!(roundtripped.remotes.is_some());
+        assert!(roundtripped.branches.is_some());
+    }
+
+    #[test]
+    fn test_find_changes_error_display() {
+        let err = FindChangesError::NoChangesFile(std::path::PathBuf::from("/tmp/output"));
+        assert_eq!(err.to_string(), "No changes file found in /tmp/output");
+
+        let err = FindChangesError::MissingChangesFileFields("Source");
+        assert_eq!(err.to_string(), "Missing field Source in changes files");
+    }
 }

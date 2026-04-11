@@ -794,28 +794,272 @@ mod tests {
     use chrono::Utc;
 
     #[test]
-    fn test_calculate_next_try_time() {
+    fn test_calculate_next_try_time_zero_attempts() {
         let finish_time = Utc::now();
-        let attempt_count = 0;
-        let next_try_time = calculate_next_try_time(finish_time, attempt_count);
+        let next_try_time = calculate_next_try_time(finish_time, 0);
         assert_eq!(finish_time, next_try_time);
+    }
 
-        let attempt_count = 1;
-        let next_try_time = calculate_next_try_time(finish_time, attempt_count);
-        assert_eq!(finish_time + chrono::Duration::hours(2), next_try_time);
+    #[test]
+    fn test_calculate_next_try_time_exponential_backoff() {
+        let finish_time = Utc::now();
+        assert_eq!(
+            calculate_next_try_time(finish_time, 1),
+            finish_time + chrono::Duration::hours(2)
+        );
+        assert_eq!(
+            calculate_next_try_time(finish_time, 2),
+            finish_time + chrono::Duration::hours(4)
+        );
+        assert_eq!(
+            calculate_next_try_time(finish_time, 3),
+            finish_time + chrono::Duration::hours(8)
+        );
+        assert_eq!(
+            calculate_next_try_time(finish_time, 4),
+            finish_time + chrono::Duration::hours(16)
+        );
+    }
 
-        let attempt_count = 2;
-        let next_try_time = calculate_next_try_time(finish_time, attempt_count);
-        assert_eq!(finish_time + chrono::Duration::hours(4), next_try_time);
+    #[test]
+    fn test_calculate_next_try_time_max_7_days() {
+        let finish_time = Utc::now();
+        // 2^10 = 1024 hours, but capped at 7*24 = 168 hours
+        let next_try_time = calculate_next_try_time(finish_time, 10);
+        assert_eq!(next_try_time, finish_time + chrono::Duration::days(7));
+        // Even higher attempts should also be capped
+        let next_try_time = calculate_next_try_time(finish_time, 20);
+        assert_eq!(next_try_time, finish_time + chrono::Duration::days(7));
+    }
 
-        let attempt_count = 3;
-        let next_try_time = calculate_next_try_time(finish_time, attempt_count);
-        assert_eq!(finish_time + chrono::Duration::hours(8), next_try_time);
+    #[test]
+    fn test_calculate_next_try_time_monotonically_increasing() {
+        let finish_time = Utc::now();
+        let mut prev = finish_time;
+        for i in 0..=10 {
+            let next = calculate_next_try_time(finish_time, i);
+            assert!(
+                next >= prev,
+                "attempt {} should be >= attempt {}",
+                i,
+                i.saturating_sub(1)
+            );
+            prev = next;
+        }
+    }
 
-        // Verify that the maximum delay is 7 days
-        let attempt_count = 10;
-        let next_try_time = calculate_next_try_time(finish_time, attempt_count);
-        assert_eq!(finish_time + chrono::Duration::days(7), next_try_time);
+    #[test]
+    fn test_publish_error_failure_code() {
+        let err = PublishError::Failure {
+            code: "merge-conflict".to_string(),
+            description: "Could not merge".to_string(),
+        };
+        assert_eq!(err.code(), "merge-conflict");
+        assert_eq!(err.description(), "Could not merge");
+    }
+
+    #[test]
+    fn test_publish_error_nothing_to_do() {
+        let err = PublishError::NothingToDo("No changes detected".to_string());
+        assert_eq!(err.code(), "nothing-to-do");
+        assert_eq!(err.description(), "No changes detected");
+    }
+
+    #[test]
+    fn test_publish_error_branch_busy() {
+        let url = url::Url::parse("https://github.com/foo/bar").unwrap();
+        let err = PublishError::BranchBusy(url);
+        assert_eq!(err.code(), "branch-busy");
+        assert_eq!(err.description(), "Branch is busy");
+    }
+
+    #[test]
+    fn test_publish_error_display() {
+        let err = PublishError::Failure {
+            code: "merge-conflict".to_string(),
+            description: "Could not merge".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "PublishError::Failure: merge-conflict: Could not merge"
+        );
+
+        let err = PublishError::NothingToDo("No changes".to_string());
+        assert_eq!(
+            err.to_string(),
+            "PublishError::PublishNothingToDo: No changes"
+        );
+
+        let url = url::Url::parse("https://github.com/foo/bar").unwrap();
+        let err = PublishError::BranchBusy(url);
+        assert_eq!(
+            err.to_string(),
+            "PublishError::BranchBusy: Branch is busy: https://github.com/foo/bar"
+        );
+    }
+
+    #[test]
+    fn test_publish_error_serialize() {
+        let err = PublishError::Failure {
+            code: "merge-conflict".to_string(),
+            description: "Could not merge".to_string(),
+        };
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["code"], "merge-conflict");
+        assert_eq!(json["description"], "Could not merge");
+
+        let err = PublishError::NothingToDo("No changes".to_string());
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["code"], "nothing-to-do");
+        assert_eq!(json["description"], "No changes");
+
+        let url = url::Url::parse("https://github.com/foo/bar").unwrap();
+        let err = PublishError::BranchBusy(url);
+        let json = serde_json::to_value(&err).unwrap();
+        assert_eq!(json["code"], "branch-busy");
+        assert_eq!(
+            json["description"],
+            "Branch is busy: https://github.com/foo/bar"
+        );
+    }
+
+    #[test]
+    fn test_publish_one_request_serde() {
+        let request = PublishOneRequest {
+            campaign: "lintian-fixes".to_string(),
+            target_branch_url: url::Url::parse("https://salsa.debian.org/foo/bar").unwrap(),
+            role: "main".to_string(),
+            log_id: "log-123".to_string(),
+            reviewers: Some(vec!["alice".to_string()]),
+            revision_id: breezyshim::RevisionId::from(b"rev-1".to_vec()),
+            unchanged_id: "unchanged-456".to_string(),
+            require_binary_diff: true,
+            differ_url: url::Url::parse("https://differ.example.com").unwrap(),
+            derived_branch_name: "lintian-fixes".to_string(),
+            tags: None,
+            allow_create_proposal: true,
+            source_branch_url: url::Url::parse("https://salsa.debian.org/fork/bar").unwrap(),
+            codemod_result: serde_json::json!({"applied": 3}),
+            commit_message_template: Some("Fix lintian issues".to_string()),
+            title_template: Some("Fix lintian issues in {{source}}".to_string()),
+            existing_mp_url: None,
+            extra_context: None,
+            mode: Mode::Propose,
+            command: "lintian-brush".to_string(),
+            external_url: None,
+            derived_owner: None,
+        };
+        let json = serde_json::to_string(&request).unwrap();
+        let roundtripped: PublishOneRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.campaign, "lintian-fixes");
+        assert_eq!(roundtripped.mode, Mode::Propose);
+        assert_eq!(roundtripped.require_binary_diff, true);
+        assert_eq!(roundtripped.reviewers, Some(vec!["alice".to_string()]));
+    }
+
+    #[test]
+    fn test_publish_one_result_serde() {
+        let result = PublishOneResult {
+            proposal_url: Some(url::Url::parse("https://github.com/foo/bar/pull/1").unwrap()),
+            proposal_web_url: Some(url::Url::parse("https://github.com/foo/bar/pull/1").unwrap()),
+            is_new: Some(true),
+            branch_name: "lintian-fixes".to_string(),
+            target_branch_url: url::Url::parse("https://github.com/foo/bar").unwrap(),
+            target_branch_web_url: None,
+            mode: Mode::Propose,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let roundtripped: PublishOneResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.branch_name, "lintian-fixes");
+        assert_eq!(roundtripped.is_new, Some(true));
+        assert_eq!(roundtripped.mode, Mode::Propose);
+        assert!(roundtripped.proposal_url.is_some());
+    }
+
+    #[test]
+    fn test_publish_one_error_serde() {
+        let err = PublishOneError {
+            code: "merge-conflict".to_string(),
+            description: "Could not merge".to_string(),
+        };
+        let json = serde_json::to_string(&err).unwrap();
+        let roundtripped: PublishOneError = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtripped.code, "merge-conflict");
+        assert_eq!(roundtripped.description, "Could not merge");
+    }
+
+    #[test]
+    fn test_check_mp_error_display() {
+        let err = CheckMpError::NoRunForMergeProposal(
+            url::Url::parse("https://github.com/foo/bar/pull/1").unwrap(),
+        );
+        assert_eq!(
+            err.to_string(),
+            "No run for merge proposal: https://github.com/foo/bar/pull/1"
+        );
+
+        let err = CheckMpError::BranchRateLimited {
+            retry_after: Some(chrono::Duration::minutes(30)),
+        };
+        assert_eq!(err.to_string(), "Branch is rate limited");
+
+        let err = CheckMpError::UnexpectedHttpStatus;
+        assert_eq!(err.to_string(), "Unexpected HTTP status");
+
+        let err = CheckMpError::ForgeLoginRequired;
+        assert_eq!(err.to_string(), "Forge login required");
+    }
+
+    #[test]
+    fn test_debdiff_error_display() {
+        let err = DebdiffError::MissingRun("run-123".to_string());
+        assert_eq!(err.to_string(), "Missing run: run-123");
+
+        let err = DebdiffError::Unavailable("service down".to_string());
+        assert_eq!(err.to_string(), "Unavailable: service down");
+    }
+
+    #[test]
+    fn test_worker_invalid_response_display() {
+        let err = WorkerInvalidResponse::WorkerError("process crashed".to_string());
+        assert_eq!(err.to_string(), "Worker error: process crashed");
+
+        let err = WorkerInvalidResponse::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "file not found",
+        ));
+        assert_eq!(err.to_string(), "IO error: file not found");
+    }
+
+    #[test]
+    fn test_run_sufficient_for_proposal_no_threshold() {
+        // When there's no threshold configured, should always be sufficient
+        let config_text = r#"name: "test" command: "test-cmd""#;
+        let config: janitor::config::Campaign =
+            protobuf::text_format::parse_from_str(config_text).unwrap();
+        assert!(run_sufficient_for_proposal(&config, Some(0)));
+        assert!(run_sufficient_for_proposal(&config, Some(100)));
+        assert!(run_sufficient_for_proposal(&config, None));
+    }
+
+    #[test]
+    fn test_run_sufficient_for_proposal_with_threshold() {
+        let config_text =
+            r#"name: "test" command: "test-cmd" merge_proposal { value_threshold: 50 }"#;
+        let config: janitor::config::Campaign =
+            protobuf::text_format::parse_from_str(config_text).unwrap();
+        assert!(run_sufficient_for_proposal(&config, Some(50)));
+        assert!(run_sufficient_for_proposal(&config, Some(100)));
+        assert!(!run_sufficient_for_proposal(&config, Some(10)));
+        // None value with threshold should still be true (assume yes)
+        assert!(run_sufficient_for_proposal(&config, None));
+    }
+
+    #[test]
+    fn test_role_branch_url_no_branch() {
+        let url = url::Url::parse("https://example.com/repo").unwrap();
+        let result = role_branch_url(&url, None);
+        assert_eq!(result, url);
     }
 }
 

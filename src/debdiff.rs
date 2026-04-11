@@ -286,8 +286,8 @@ pub fn markdownify_debdiff(debdiff: &str) -> String {
                 if !line.trim().is_empty() {
                     let line = lazy_regex::regex_replace!(
                         "^(No differences were encountered between the control files of package) (.*)$",
-                        r"$1 \*\*$2\*\*",
                         line,
+                        r"$1 \*\*$2\*\*",
                     );
                     ret.push(line.to_string());
                 } else {
@@ -303,18 +303,18 @@ pub fn markdownify_debdiff(debdiff: &str) -> String {
 }
 
 pub fn htmlize_debdiff(debdiff: &str) -> String {
-    let highlight_wdiff = |line| {
+    let highlight_wdiff = |line: &str| {
         let line = lazy_regex::regex_replace!(
             r"\[-(.*?)-\]",
+            line,
             r#"<span style="color:red;font-weight:bold">$1</span>"#,
-            line
         );
         let line = lazy_regex::regex_replace!(
             r"\{\+(.*?)\+\}",
+            &*line,
             r#"<span style="color:green;font-weight:bold">$1</span>"#,
-            line,
         );
-        line
+        line.into_owned()
     };
 
     let mut ret = vec![];
@@ -337,7 +337,7 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
                     }
                     ret.push(format!(
                         "<li><pre>{}</pre></li>",
-                        highlight_wdiff(mlines.join("\n"))
+                        highlight_wdiff(&mlines.join("\n"))
                     ));
                 }
                 ret.push("</ul>".to_owned());
@@ -357,8 +357,8 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
                 if !line.trim().is_empty() {
                     let line = lazy_regex::regex_replace!(
                         "^(No differences were encountered between the control files of package) (.*)$",
-                        r"$1 <b>$2</b>",
                         line,
+                        r"$1 <b>$2</b>",
                     ).to_string();
                     ret.push(line);
                 } else {
@@ -598,6 +598,189 @@ Version: [-5.25.4-1~jan+unchanged1-] {+5.25.4-2~jan+lint1+}
                 vec!["grault", " garply", " waldo"],
                 vec!["thud"],
             ]
+        );
+    }
+
+    #[test]
+    fn test_debdiff_is_empty_no_sections() {
+        assert_eq!(debdiff_is_empty("just some text\n"), true);
+    }
+
+    #[test]
+    fn test_debdiff_is_empty_with_sections() {
+        let debdiff = "Some Title\n----------\nsome content\n";
+        assert_eq!(debdiff_is_empty(debdiff), false);
+    }
+
+    #[test]
+    fn test_debdiff_is_empty_blank() {
+        assert_eq!(debdiff_is_empty(""), true);
+    }
+
+    #[test]
+    fn test_section_is_wdiff_package() {
+        assert_eq!(
+            section_is_wdiff(
+                "Control files of package mypackage: lines which differ (wdiff format)",
+            ),
+            (true, Some("mypackage"))
+        );
+    }
+
+    #[test]
+    fn test_section_is_wdiff_no_package() {
+        assert_eq!(
+            section_is_wdiff("Control files: lines which differ (wdiff format)"),
+            (true, None)
+        );
+    }
+
+    #[test]
+    fn test_section_is_wdiff_not_wdiff() {
+        assert_eq!(
+            section_is_wdiff("Files in second .changes but not in first"),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn test_markdownify_debdiff_basic() {
+        let title = "Files in second .changes but not in first";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\n-rw-r--r--  root/root   /usr/lib/somefile\n");
+        assert_eq!(
+            markdownify_debdiff(&debdiff),
+            "### Files in second .changes but not in first\n\
+             \x20\x20\x20\x20-rw-r--r--  root/root   /usr/lib/somefile"
+        );
+    }
+
+    #[test]
+    fn test_markdownify_debdiff_wdiff_section() {
+        let title = "Control files of package foo: lines which differ (wdiff format)";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\nVersion: [-1.0-1-] {{+1.0-2+}}\n");
+        assert_eq!(
+            markdownify_debdiff(&debdiff),
+            "### Control files of package foo: lines which differ (wdiff format)\n\
+             * Version: [-1.0-1-] {+1.0-2+}"
+        );
+    }
+
+    #[test]
+    fn test_markdownify_debdiff_empty() {
+        assert_eq!(markdownify_debdiff(""), "");
+    }
+
+    #[test]
+    fn test_markdownify_debdiff_plain_paragraph() {
+        assert_eq!(
+            markdownify_debdiff("File lists identical (after any substitutions)\n"),
+            "\nFile lists identical (after any substitutions)"
+        );
+    }
+
+    #[test]
+    fn test_htmlize_debdiff_basic() {
+        let title = "Files in second .changes but not in first";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\n-rw-r--r--  root/root   /usr/lib/somefile\n");
+        assert_eq!(
+            htmlize_debdiff(&debdiff),
+            "<h4>Files in second .changes but not in first</h4>\n\
+             <pre>\n\
+             -rw-r--r--  root/root   /usr/lib/somefile\n\
+             </pre>"
+        );
+    }
+
+    #[test]
+    fn test_htmlize_debdiff_wdiff_highlighting() {
+        let title = "Control files: lines which differ (wdiff format)";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\nVersion: [-1.0-] {{+2.0+}}\n");
+        assert_eq!(
+            htmlize_debdiff(&debdiff),
+            "<h4>Control files: lines which differ (wdiff format)</h4>\n\
+             <ul>\n\
+             <li><pre>Version: <span style=\"color:red;font-weight:bold\">1.0</span> <span style=\"color:green;font-weight:bold\">2.0</span></pre></li>\n\
+             </ul>"
+        );
+    }
+
+    #[test]
+    fn test_htmlize_debdiff_empty() {
+        assert_eq!(htmlize_debdiff(""), "");
+    }
+
+    #[test]
+    fn test_filter_boring_no_wdiff() {
+        let title = "Files in second .changes but not in first";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\n-rw-r--r--  root/root   /usr/lib/somefile\n");
+        assert_eq!(
+            filter_boring(&debdiff, "1.0-1", "1.0-2"),
+            "Files in second .changes but not in first\n\
+             -----------------------------------------\n\
+             -rw-r--r--  root/root   /usr/lib/somefile\n"
+        );
+    }
+
+    #[test]
+    fn test_filter_boring_wdiff_empty_input() {
+        assert_eq!(
+            filter_boring_wdiff(vec![], "1.0", "2.0"),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn test_filter_boring_wdiff_no_field_separator() {
+        assert_eq!(
+            filter_boring_wdiff(vec!["no colon here"], "1.0", "2.0"),
+            vec!["no colon here"]
+        );
+    }
+
+    #[test]
+    fn test_iter_sections_empty_string() {
+        assert_eq!(
+            iter_sections("").collect::<Vec<_>>(),
+            Vec::<(Option<&str>, Vec<&str>)>::new()
+        );
+    }
+
+    #[test]
+    fn test_iter_sections_multiple_blank_lines() {
+        // An empty line ("") between blank lines is treated as a title candidate
+        // because the next blank line has zero length matching "".repeat(0)
+        assert_eq!(
+            iter_sections("first\n\n\nsecond\n").collect::<Vec<_>>(),
+            vec![(None, vec!["first"]), (Some(""), vec!["second"]),]
+        );
+    }
+
+    #[test]
+    fn test_filter_boring_all_boring_control_files() {
+        let title = "Control files: lines which differ (wdiff format)";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\nVersion: [-1.0-1-] {{+1.0-2+}}\n");
+        assert_eq!(
+            filter_boring(&debdiff, "1.0-1", "1.0-2"),
+            "No differences were encountered in the control files\n"
+        );
+    }
+
+    #[test]
+    fn test_markdownify_debdiff_url_escaping() {
+        let title = "Control files: lines which differ (wdiff format)";
+        let dashes = "-".repeat(title.len());
+        let debdiff = format!("{title}\n{dashes}\nHomepage: [-http://old.example.com-] {{+http://new.example.com+}}\n");
+        let md = markdownify_debdiff(&debdiff);
+        assert_eq!(
+            md,
+            "### Control files: lines which differ (wdiff format)\n\
+             * Homepage: [-http&#8203;://old.example.com-] {+http&#8203;://new.example.com+}"
         );
     }
 }

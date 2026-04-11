@@ -3650,6 +3650,7 @@ dependencies = [
  "sqlx",
  "sqlx-core",
  "sqlx-postgres",
+ "tempfile",
  "tokio",
  "url",
 ]

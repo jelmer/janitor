@@ -593,7 +593,7 @@ impl VcsManager for LocalGitVcsManager {
             ),
             None,
         ) {
-            Ok(branch) => Ok(Some(Box::new(branch))),
+            Ok(branch) => Ok(Some(branch)),
             Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
                 Ok(None)
             }
@@ -754,7 +754,7 @@ impl VcsManager for LocalBzrVcsManager {
             ),
             None,
         ) {
-            Ok(branch) => Ok(Some(Box::new(branch))),
+            Ok(branch) => Ok(Some(branch)),
             Err(BranchOpenError::Unavailable { .. }) | Err(BranchOpenError::Missing { .. }) => {
                 Ok(None)
             }

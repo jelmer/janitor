@@ -533,6 +533,222 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_log_file_not_found() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/logs/nonexistent.log")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+        assert_eq!(get_body(response).await, "No such log file");
+    }
+
+    #[tokio::test]
+    async fn test_log_file_path_traversal() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/logs/..%2F..%2Fetc%2Fpasswd")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        // Should reject paths with slashes after URL decoding
+        assert_eq!(response.status(), 400);
+        assert_eq!(get_body(response).await, "Invalid filename");
+    }
+
+    #[tokio::test]
+    async fn test_artifact_file_not_found() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts/nonexistent.deb")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+        assert_eq!(get_body(response).await, "No such artifact file");
+    }
+
+    #[tokio::test]
+    async fn test_artifact_file_path_traversal() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts/..%5Ctest.txt")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        // Should reject paths with backslashes
+        assert_eq!(response.status(), 400);
+        assert_eq!(get_body(response).await, "Invalid filename");
+    }
+
+    #[tokio::test]
+    async fn test_log_file_content_type() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("build.log"), "log content here").unwrap();
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/logs/build.log")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "text/plain"
+        );
+        assert_eq!(get_body(response).await, "log content here");
+    }
+
+    #[tokio::test]
+    async fn test_artifact_file_content_type() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("package.deb"), "fake deb content").unwrap();
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts/package.deb")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/octet-stream"
+        );
+        assert_eq!(get_body(response).await, "fake deb content");
+    }
+
+    #[tokio::test]
+    async fn test_logs_html_response() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("build.log"), "content").unwrap();
+
+        let app = app(state.clone());
+        // Without Accept: application/json, should get HTML
+        let request = Request::builder().uri("/logs").body(Body::empty()).unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body = get_body(response).await;
+        // Should be HTML, not JSON
+        assert!(body.contains("<"), "Expected HTML response");
+    }
+
+    #[tokio::test]
+    async fn test_artifacts_html_response() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("package.deb"), "content").unwrap();
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body = get_body(response).await;
+        assert!(body.contains("<"), "Expected HTML response");
+    }
+
+    #[tokio::test]
+    async fn test_artifacts_excludes_log_files() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("build.log"), "log").unwrap();
+        std::fs::write(td.path().join("package.deb"), "deb").unwrap();
+        std::fs::write(td.path().join("result.tar.gz"), "tar").unwrap();
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+        // build.log should be excluded from artifacts
+        assert!(!body.contains(&"build.log".to_string()));
+        assert!(body.contains(&"package.deb".to_string()));
+        assert!(body.contains(&"result.tar.gz".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_logs_only_log_files() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let td = tempfile::tempdir().unwrap();
+        state.write().unwrap().output_directory = Some(td.path().to_path_buf());
+        std::fs::write(td.path().join("build.log"), "log").unwrap();
+        std::fs::write(td.path().join("package.deb"), "deb").unwrap();
+
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/logs")
+            .header("Accept", "application/json")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 200);
+        let body: Vec<String> = serde_json::from_str(&get_body(response).await).unwrap();
+        assert_eq!(body, vec!["build.log"]);
+    }
+
+    #[tokio::test]
+    async fn test_log_file_no_output_dir() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/logs/build.log")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+        assert_eq!(get_body(response).await, "Log directory not created yet");
+    }
+
+    #[tokio::test]
+    async fn test_artifact_file_no_output_dir() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let app = app(state.clone());
+        let request = Request::builder()
+            .uri("/artifacts/package.deb")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 404);
+        assert_eq!(
+            get_body(response).await,
+            "Artifact directory not created yet"
+        );
+    }
+
+    #[tokio::test]
     async fn test_log_id() {
         let state = Arc::new(RwLock::new(AppState::default()));
         let app = app(state.clone());

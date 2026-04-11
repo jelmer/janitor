@@ -712,6 +712,161 @@ mod tests {
         );
         assert!(offset > 0.0);
     }
+
+    #[test]
+    fn test_calculate_offset_exact_minimum_codebase_value() {
+        // Passing exactly the minimum should work
+        let offset = calculate_offset(
+            Duration::seconds(60),
+            Some(MINIMUM_NORMALIZED_CODEBASE_VALUE),
+            0.5,
+            Some(100.0),
+            5,
+            None,
+        );
+        assert!(offset > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_offset_codebase_value_1() {
+        // Maximum normalized codebase value
+        let offset = calculate_offset(Duration::seconds(60), Some(1.0), 0.5, Some(100.0), 5, None);
+        assert!(offset > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_offset_higher_codebase_value_lower_offset() {
+        let offset_high = calculate_offset(
+            Duration::seconds(60),
+            Some(1.0), // high codebase value
+            0.5,
+            Some(100.0),
+            5,
+            None,
+        );
+        let offset_low = calculate_offset(
+            Duration::seconds(60),
+            Some(0.2), // low codebase value
+            0.5,
+            Some(100.0),
+            5,
+            None,
+        );
+        assert!(offset_high < offset_low);
+    }
+
+    #[test]
+    fn test_calculate_offset_formula_correctness() {
+        // Verify the formula: estimated_cost / estimated_value
+        // Cost = MINIMUM_COST + (1000 * seconds) + (microseconds / 1000)
+        // Value = codebase_value * probability * candidate_value
+        let duration = Duration::seconds(60);
+        let codebase_value = 0.5;
+        let probability = 0.8;
+        let candidate_value = 100.0;
+
+        let offset = calculate_offset(
+            duration,
+            Some(codebase_value),
+            probability,
+            Some(candidate_value),
+            5, // not first run, so no bonus
+            None,
+        );
+
+        let expected_cost = MINIMUM_COST
+            + (1000.0 * duration.num_seconds() as f64)
+            + (duration.num_microseconds().unwrap() as f64 / 1000.0);
+        let expected_value = codebase_value * probability * candidate_value;
+        let expected_offset = expected_cost / expected_value;
+
+        assert_eq!(offset, expected_offset);
+    }
+
+    #[test]
+    fn test_calculate_offset_first_run_bonus_amount() {
+        // Verify the first-run bonus adds FIRST_RUN_BONUS to candidate value
+        let duration = Duration::seconds(60);
+        let codebase_value = 0.5;
+        let probability = 0.8;
+        let candidate_value = 100.0;
+
+        let offset = calculate_offset(
+            duration,
+            Some(codebase_value),
+            probability,
+            Some(candidate_value),
+            0, // first run
+            None,
+        );
+
+        let expected_cost = MINIMUM_COST
+            + (1000.0 * duration.num_seconds() as f64)
+            + (duration.num_microseconds().unwrap() as f64 / 1000.0);
+        let expected_value = codebase_value * probability * (candidate_value + FIRST_RUN_BONUS);
+        let expected_offset = expected_cost / expected_value;
+
+        assert_eq!(offset, expected_offset);
+    }
+
+    #[test]
+    fn test_calculate_offset_candidate_value_none() {
+        // When candidate_value is None, default to 1.0 (with first run bonus if applicable)
+        let offset = calculate_offset(
+            Duration::seconds(60),
+            Some(0.5),
+            0.5,
+            None, // no candidate value
+            5,
+            None,
+        );
+        assert!(offset > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_offset_candidate_value_none_first_run() {
+        // None candidate value defaults to 1.0 without FIRST_RUN_BONUS
+        // (bonus only applies when candidate_value is Some)
+        let duration = Duration::seconds(60);
+        let offset = calculate_offset(
+            duration,
+            Some(0.5),
+            0.5,
+            None,
+            0, // first run
+            None,
+        );
+
+        let expected_cost = MINIMUM_COST
+            + (1000.0 * duration.num_seconds() as f64)
+            + (duration.num_microseconds().unwrap() as f64 / 1000.0);
+        let expected_value = 0.5 * 0.5 * 1.0;
+        let expected_offset = expected_cost / expected_value;
+
+        assert_eq!(offset, expected_offset);
+    }
+
+    #[test]
+    fn test_schedule_error_display() {
+        let err = Error::CandidateUnavailable {
+            campaign: "lintian-fixes".to_string(),
+            codebase: "mycodebase".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "No candidate available for lintian-fixes in mycodebase"
+        );
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(FIRST_RUN_BONUS, 100.0);
+        assert_eq!(DEFAULT_ESTIMATED_DURATION, 15);
+        assert_eq!(DEFAULT_SCHEDULE_OFFSET, -1.0);
+        assert!(MINIMUM_COST > 0.0);
+        assert!(MINIMUM_NORMALIZED_CODEBASE_VALUE > 0.0);
+        assert!(DEFAULT_NORMALIZED_CODEBASE_VALUE > MINIMUM_NORMALIZED_CODEBASE_VALUE);
+    }
 }
 
 pub async fn do_schedule(
