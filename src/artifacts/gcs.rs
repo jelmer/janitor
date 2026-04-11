@@ -85,7 +85,9 @@ impl ArtifactManager for GCSArtifactManager {
                 let mut rd = tokio::fs::read_dir(local_path).await?;
                 while let Some(entry) = rd.next_entry().await? {
                     if entry.file_type().await?.is_file() {
-                        entries.push(entry.file_name().into_string().unwrap());
+                        if let Ok(name) = entry.file_name().into_string() {
+                            entries.push(name);
+                        }
                     }
                 }
                 entries
@@ -120,7 +122,6 @@ impl ArtifactManager for GCSArtifactManager {
     }
 
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error> {
-        let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
         let bucket = bucket_resource(&self.bucket_name);
 
@@ -151,7 +152,6 @@ impl ArtifactManager for GCSArtifactManager {
         run_id: &str,
         filename: &str,
     ) -> Result<Box<dyn std::io::Read + Send + Sync>, Error> {
-        let bucket = self.bucket_path();
         let object_name = format!("{}/{}", run_id, filename);
         let bucket = bucket_resource(&self.bucket_name);
 
@@ -179,7 +179,9 @@ impl ArtifactManager for GCSArtifactManager {
             self.bucket_name, encoded_object_name
         )
         .parse()
-        .unwrap()
+        .unwrap_or_else(|_| {
+            url::Url::parse("https://invalid.url").expect("hardcoded URL should be valid")
+        })
     }
 
     async fn retrieve_artifacts(
@@ -188,7 +190,6 @@ impl ArtifactManager for GCSArtifactManager {
         local_path: &Path,
         filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error> {
-        let bucket = self.bucket_path();
         let prefix = format!("{}/", run_id);
         let bucket = bucket_resource(&self.bucket_name);
 
@@ -227,8 +228,9 @@ impl ArtifactManager for GCSArtifactManager {
             .unwrap();
 
         for object in response.objects {
-            let id = object.name.split('/').next().unwrap().to_string();
-            ids.insert(id);
+            if let Some(id) = object.name.split('/').next() {
+                ids.insert(id.to_string());
+            }
         }
 
         Box::new(ids.into_iter())

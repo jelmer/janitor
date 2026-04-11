@@ -38,15 +38,13 @@ impl ArtifactManager for LocalArtifactManager {
                 Err(e)
             }
         })?;
-        let names = names.map_or_else(
-            || {
-                fs::read_dir(local_path)
-                    .unwrap()
-                    .map(|entry| entry.unwrap().file_name().into_string().unwrap())
-                    .collect::<Vec<_>>()
-            },
-            |names| names.to_vec(),
-        );
+        let names = match names {
+            Some(names) => names.to_vec(),
+            None => fs::read_dir(local_path)
+                .map_err(Error::IoError)?
+                .filter_map(|entry| entry.ok().and_then(|e| e.file_name().into_string().ok()))
+                .collect::<Vec<_>>(),
+        };
         for name in names {
             fs::copy(local_path.join(&name), run_dir.join(&name))?;
         }
@@ -63,7 +61,9 @@ impl ArtifactManager for LocalArtifactManager {
     }
 
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url {
-        url::Url::from_file_path(self.path.join(run_id).join(filename)).unwrap()
+        url::Url::from_file_path(self.path.join(run_id).join(filename)).unwrap_or_else(|_| {
+            url::Url::parse("file:///invalid/path").expect("hardcoded URL should be valid")
+        })
     }
 
     async fn retrieve_artifacts(
@@ -81,8 +81,10 @@ impl ArtifactManager for LocalArtifactManager {
             let entry = entry?;
             let name = entry.file_name();
             let filter_fn = filter_fn.unwrap_or(&|_| true);
-            if filter_fn(name.to_str().unwrap()) {
-                fs::copy(entry.path(), local_path.join(&name))?;
+            if let Some(name_str) = name.to_str() {
+                if filter_fn(name_str) {
+                    fs::copy(entry.path(), local_path.join(&name))?;
+                }
             }
         }
         Ok(())
@@ -90,16 +92,22 @@ impl ArtifactManager for LocalArtifactManager {
 
     async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send> {
         let entries = fs::read_dir(&self.path)
-            .unwrap()
-            .filter_map(|entry| {
-                let entry = entry.unwrap();
-                if entry.file_type().unwrap().is_dir() {
-                    Some(entry.file_name().into_string().unwrap())
-                } else {
-                    None
-                }
+            .ok()
+            .map(|dir| {
+                dir.filter_map(|entry| {
+                    entry.ok().and_then(|e| {
+                        e.file_type().ok().and_then(|ft| {
+                            if ft.is_dir() {
+                                e.file_name().into_string().ok()
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                })
+                .collect::<Vec<_>>()
             })
-            .collect::<Vec<_>>();
+            .unwrap_or_default();
         Box::new(entries.into_iter())
     }
 

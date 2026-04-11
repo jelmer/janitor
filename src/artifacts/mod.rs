@@ -16,6 +16,7 @@ pub enum Error {
     ServiceUnavailable,
     ArtifactsMissing,
     IoError(std::io::Error),
+    InvalidPath,
     Other(String),
 }
 
@@ -25,6 +26,7 @@ impl std::fmt::Display for Error {
             Error::ServiceUnavailable => write!(f, "Service unavailable"),
             Error::ArtifactsMissing => write!(f, "Artifacts missing"),
             Error::IoError(e) => write!(f, "IO error: {}", e),
+            Error::InvalidPath => write!(f, "Invalid path"),
             Error::Other(e) => write!(f, "Error: {}", e),
         }
     }
@@ -40,25 +42,36 @@ impl From<std::io::Error> for Error {
 
 #[async_trait]
 pub trait ArtifactManager: std::fmt::Debug + Send + Sync {
+    /// Store artifacts from a local directory
     async fn store_artifacts(
         &self,
         run_id: &str,
         local_path: &Path,
         names: Option<&[String]>,
     ) -> Result<(), Error>;
+
+    /// Get a single artifact as a reader
     async fn get_artifact(
         &self,
         run_id: &str,
         filename: &str,
     ) -> Result<Box<dyn std::io::Read + Sync + Send>, Error>;
+
+    /// Get the public URL for an artifact
     fn public_artifact_url(&self, run_id: &str, filename: &str) -> url::Url;
+
+    /// Retrieve artifacts to a local directory with optional filter
     async fn retrieve_artifacts(
         &self,
         run_id: &str,
         local_path: &Path,
         filter_fn: Option<&(dyn for<'a> Fn(&'a str) -> bool + Sync + Send)>,
     ) -> Result<(), Error>;
+
+    /// List all artifact IDs
     async fn iter_ids(&self) -> Box<dyn Iterator<Item = String> + Send>;
+
+    /// Delete all artifacts for a run
     async fn delete_artifacts(&self, run_id: &str) -> Result<(), Error>;
 }
 
@@ -100,27 +113,53 @@ pub async fn upload_backup_artifacts(
     backup_artifact_manager: &dyn ArtifactManager,
     artifact_manager: &dyn ArtifactManager,
 ) -> Result<Vec<String>, Error> {
-    let mut done = vec![];
-    // TODO: Do a few in parallel?
-    for id in backup_artifact_manager.iter_ids().await {
-        let td = tempfile::NamedTempFile::new()?;
-        backup_artifact_manager
-            .retrieve_artifacts(&id, td.path(), None)
-            .await?;
+    use futures::stream::{self, StreamExt};
 
-        match artifact_manager.store_artifacts(&id, td.path(), None).await {
-            Ok(_) => {
-                backup_artifact_manager.delete_artifacts(&id).await?;
-                done.push(id);
-            }
-            Err(Error::ArtifactsMissing) => unreachable!(),
-            Err(e) => {
-                log::warn!("Unable to upload backup artifacts for {}: {}", id, e);
-                continue;
-            }
+    // Process artifacts in parallel with a concurrency limit
+    const MAX_CONCURRENT: usize = 3;
+
+    let ids: Vec<_> = backup_artifact_manager.iter_ids().await.collect();
+
+    let results = stream::iter(ids)
+        .map(|id| async move {
+            let result =
+                process_single_backup_artifact(&id, backup_artifact_manager, artifact_manager)
+                    .await;
+            (id, result)
+        })
+        .buffer_unordered(MAX_CONCURRENT)
+        .collect::<Vec<_>>()
+        .await;
+
+    let mut done = vec![];
+    for (id, result) in results {
+        match result {
+            Ok(_) => done.push(id),
+            Err(e) => log::warn!("Unable to upload backup artifacts for {}: {}", id, e),
         }
     }
+
     Ok(done)
+}
+
+async fn process_single_backup_artifact(
+    id: &str,
+    backup_artifact_manager: &dyn ArtifactManager,
+    artifact_manager: &dyn ArtifactManager,
+) -> Result<(), Error> {
+    let td = tempfile::NamedTempFile::new()?;
+    backup_artifact_manager
+        .retrieve_artifacts(id, td.path(), None)
+        .await?;
+
+    match artifact_manager.store_artifacts(id, td.path(), None).await {
+        Ok(_) => {
+            backup_artifact_manager.delete_artifacts(id).await?;
+            Ok(())
+        }
+        Err(Error::ArtifactsMissing) => unreachable!(),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn store_artifacts_with_backup(
