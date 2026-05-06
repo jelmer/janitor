@@ -34,5 +34,5 @@ jobs:
         run: |
           set -x
           set -o pipefail
-          cat py/janitor/state.sql py/janitor/debian/debian.sql \
+          cat schema/state.sql schema/debian/debian.sql \
             | pg_virtualenv psql -v ON_ERROR_STOP=1

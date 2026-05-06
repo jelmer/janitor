@@ -17,6 +17,7 @@
 
 
 import shlex
+from pathlib import Path
 from urllib.request import URLopener, build_opener, install_opener
 
 from breezy.transport import http as _mod_http
@@ -26,18 +27,17 @@ __version__ = (0, 1, 0)
 version_string = ".".join(map(str, __version__))
 
 
+_SCHEMA_DIR = Path(__file__).resolve().parent.parent.parent / "schema"
+
+
 def get_core_schema() -> str:
     """Return the core janitor database schema SQL."""
-    import pkg_resources
-
-    return pkg_resources.resource_string("janitor", "state.sql").decode("utf-8")
+    return (_SCHEMA_DIR / "state.sql").read_text()
 
 
 def get_debian_schema() -> str:
     """Return the Debian-specific database schema SQL."""
-    import pkg_resources
-
-    return pkg_resources.resource_string("janitor.debian", "debian.sql").decode("utf-8")
+    return (_SCHEMA_DIR / "debian" / "debian.sql").read_text()
 
 
 def set_user_agent(user_agent):

@@ -1,5 +1,5 @@
-import importlib.resources
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import asyncpg
 import pytest_asyncio
@@ -9,18 +9,16 @@ from janitor.state import create_pool
 
 pytest_plugins = ["aiohttp"]
 
+_SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"
+
 
 @pytest_asyncio.fixture()
 async def db():
     with testing.postgresql.Postgresql() as postgresql:
         conn = await asyncpg.connect(postgresql.url())
-        files = importlib.resources.files("janitor")
-        debian_files = importlib.resources.files("janitor.debian")
         try:
-            with files.joinpath("state.sql").open() as f:
-                await conn.execute(f.read())
-            with debian_files.joinpath("debian.sql").open() as f:
-                await conn.execute(f.read())
+            await conn.execute((_SCHEMA_DIR / "state.sql").read_text())
+            await conn.execute((_SCHEMA_DIR / "debian" / "debian.sql").read_text())
         finally:
             await conn.close()
 
