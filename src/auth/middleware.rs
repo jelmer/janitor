@@ -270,29 +270,6 @@ impl Default for RateLimitConfig {
     }
 }
 
-/// Rate limiting middleware
-pub async fn rate_limit_middleware(
-    config: RateLimitConfig,
-    request: Request,
-    next: Next,
-) -> Result<Response, Response> {
-    // Get auth context for rate limiting key
-    let identity = if let Some(auth_context) = request.extensions().get::<AuthContext>() {
-        auth_context.identity()
-    } else {
-        // Use IP address for anonymous requests
-        "anonymous".to_string()
-    };
-
-    // TODO: Implement actual rate limiting logic with Redis or in-memory store
-    // For now, just log and continue
-    if config.enable_audit_logging {
-        log::debug!("Rate limit check for identity: {}", identity);
-    }
-
-    Ok(next.run(request).await)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
