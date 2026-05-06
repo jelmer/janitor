@@ -27,15 +27,15 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import Counter, setup_metrics
 from redis.asyncio import Redis
-from silver_platter.debian import (
-    DebsignFailure,
-    DputFailure,
-    debsign,
-    dput_changes,
-)
+from silver_platter import debian as sp_debian
 
 from ..artifacts import ArtifactsMissing, get_artifact_manager
 from ..config import read_config
+
+DebsignFailure = sp_debian.DebsignFailure
+DputFailure = sp_debian.DputFailure
+debsign = sp_debian.debsign
+dput_changes = sp_debian.dput_changes
 
 logger = logging.getLogger("janitor.debian.auto_upload")
 debsign_failed_count = Counter(
