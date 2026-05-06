@@ -639,9 +639,9 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 
 [[package]]
 name = "breezyshim"
-version = "0.7.13"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "903de5d500b02e67394b9f623e33aaac2d6721c26e5f94f334b987d2a8a2bf8d"
+checksum = "d7e782dc8df776a75906f5ea38bdeeff9347ce490ab9b2bdc6858b10d7b3566b"
 dependencies = [
  "chrono",
  "ctor",
@@ -2946,6 +2946,7 @@ dependencies = [
  "async-compression",
  "async-trait",
  "axum",
+ "base64",
  "breezyshim",
  "buildlog-consultant",
  "bytes",

@@ -73,7 +73,7 @@ sqlx-core = { version = "^0.8", features = ["chrono"] }
 pyo3 = { version = "0.28" }
 reqwest = { version = "0.13", features = ["blocking"] }
 pyo3-log = "0.13"
-breezyshim = "0.7"
+breezyshim = "0.7.18"
 #breezyshim = { path = "../breezyshim/trunk" }
 log = "0.4"
 env_logger = ">=0.10"
