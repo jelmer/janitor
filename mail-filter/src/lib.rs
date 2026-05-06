@@ -22,15 +22,16 @@ pub fn parse_plain_text_body(text: &str) -> Option<String> {
 
     for (i, line) in lines.iter().enumerate() {
         if line == &"Reply to this email directly or view it on GitHub:" {
-            return Some(lines[i + 1].split('#').next().unwrap().to_string());
+            let url = lines.get(i + 1)?.split('#').next().unwrap();
+            return Some(url.to_string());
         }
         if line == &"For more details, see:"
-            && lines[i + 1].starts_with("https://code.launchpad.net/")
+            && lines.get(i + 1).is_some_and(|l| l.starts_with("https://code.launchpad.net/"))
         {
             return Some(lines[i + 1].to_string());
         }
         if let Some((field, value)) = line.split_once(':') {
-            if field.to_lowercase() == "merge request url" {
+            if field.eq_ignore_ascii_case("merge request url") {
                 return Some(value.trim().to_string());
             }
         }
@@ -60,8 +61,8 @@ fn parse_json_ld(ld: &Value) -> Option<String> {
                         .or_else(|| ld_object.get("potentialAction"))?;
                     let action_type = action.get("@type")?;
                     if action_type == &Value::String("ViewAction".to_string()) {
-                        let url = action.get("url")?;
-                        return Some(url.as_str().unwrap().split('#').next().unwrap().to_string());
+                        let url = action.get("url")?.as_str()?;
+                        return Some(url.split('#').next().unwrap().to_string());
                     }
                 }
             }
@@ -92,27 +93,33 @@ pub fn parse_html_body(contents: &str) -> Option<String> {
 
 /// Parse an email file to extract a merge proposal URL.
 ///
-/// # Arguments
-/// * `file` - The email file to parse
-///
-/// # Returns
-/// An Option containing the merge proposal URL if found
+/// Returns `None` if the file cannot be read, the email cannot be parsed,
+/// or no merge proposal URL is found in any text/html or text/plain part.
 pub fn parse_email<F: std::io::Read>(mut file: F) -> Option<String> {
     let mut data = String::new();
-    file.read_to_string(&mut data).unwrap();
+    file.read_to_string(&mut data)
+        .inspect_err(|e| log::error!("Failed to read email: {}", e))
+        .ok()?;
 
-    let mail = parse_mail(data.as_bytes()).unwrap();
+    let mail = parse_mail(data.as_bytes())
+        .inspect_err(|e| log::error!("Failed to parse email: {}", e))
+        .ok()?;
+
     for part in mail.subparts {
-        if part.ctype.mimetype == "text/html" {
-            let body = part.get_body().unwrap();
-            if let Some(merge_proposal_url) = parse_html_body(&body) {
-                return Some(merge_proposal_url);
+        let body = match part.get_body() {
+            Ok(body) => body,
+            Err(e) => {
+                log::debug!("Failed to read part body: {}", e);
+                continue;
             }
-        } else if part.ctype.mimetype == "text/plain" {
-            let body = part.get_body().unwrap();
-            if let Some(merge_proposal_url) = parse_plain_text_body(&body) {
-                return Some(merge_proposal_url);
-            }
+        };
+        let parsed = match part.ctype.mimetype.as_str() {
+            "text/html" => parse_html_body(&body),
+            "text/plain" => parse_plain_text_body(&body),
+            _ => continue,
+        };
+        if parsed.is_some() {
+            return parsed;
         }
     }
 
