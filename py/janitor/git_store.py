@@ -25,7 +25,7 @@ import warnings
 from contextlib import closing, suppress
 from http.client import parse_headers  # type: ignore
 from io import BytesIO
-from typing import Optional
+from typing import Optional, cast
 
 import aiohttp_jinja2
 import aiozipkin
@@ -35,11 +35,11 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp_openmetrics import metrics, metrics_middleware
 from dulwich.errors import HangupException, MissingCommitError
-from dulwich.objects import ZERO_SHA, valid_hexsha
+from dulwich.objects import ZERO_SHA, ObjectID, valid_hexsha
 from dulwich.protocol import ReceivableProtocol
 from dulwich.repo import NotGitRepository, Repo
 from dulwich.server import DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS
-from dulwich.server import DictBackend
+from dulwich.server import BackendRepo, DictBackend
 from dulwich.web import NO_CACHE_HEADERS, HTTPGitApplication
 from jinja2 import select_autoescape
 
@@ -124,8 +124,8 @@ async def git_revision_info_request(request: web.Request) -> web.Response:
         try:
             with span.new_child("get-walker"):
                 walker = repo.get_walker(
-                    include=[new_sha],
-                    exclude=([old_sha] if old_sha != ZERO_SHA else []),
+                    include=[ObjectID(new_sha)],
+                    exclude=([ObjectID(old_sha)] if old_sha != ZERO_SHA else []),
                 )
         except MissingCommitError:
             return web.json_response({}, status=404)
@@ -445,7 +445,7 @@ async def dulwich_refs(request: web.Request) -> web.StreamResponse:
         out = BytesIO()
         proto = ReceivableProtocol(BytesIO().read, out.write)
         handler = handler_cls(
-            DictBackend({".": repo}),
+            DictBackend({".": cast(BackendRepo, repo)}),
             ["."],
             proto,
             stateless_rpc=True,
@@ -494,7 +494,10 @@ async def dulwich_service(request: web.Request) -> web.StreamResponse:
         def handle():
             proto = ReceivableProtocol(inf.read, outf.write)
             handler = handler_cls(
-                DictBackend({".": repo}), ["."], proto, stateless_rpc=True
+                DictBackend({".": cast(BackendRepo, repo)}),
+                ["."],
+                proto,
+                stateless_rpc=True,
             )
             try:
                 handler.handle()

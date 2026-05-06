@@ -1,7 +1,7 @@
 use crate::io::Readable;
 use chrono::{DateTime, Utc};
 use pyo3::create_exception;
-use pyo3::exceptions::{PyRuntimeError, PyTimeoutError};
+use pyo3::exceptions::{PyOSError, PyRuntimeError, PyTimeoutError};
 use pyo3::prelude::*;
 use std::sync::Arc;
 
@@ -18,7 +18,9 @@ fn convert_logs_error_to_py(err: janitor::logs::Error) -> PyErr {
         }
         janitor::logs::Error::NotFound => pyo3::exceptions::PyKeyError::new_err("Log not found"),
         janitor::logs::Error::PermissionDenied => PyRuntimeError::new_err("Permission denied"),
-        janitor::logs::Error::Io(e) => e.into(),
+        janitor::logs::Error::Io(e) => PyOSError::new_err(e),
+        janitor::logs::Error::LogRetrieval(e) => PyRuntimeError::new_err(e),
+        janitor::logs::Error::Timeout => PyTimeoutError::new_err("Operation timed out"),
         janitor::logs::Error::Other(e) => PyRuntimeError::new_err(e),
     }
 }
@@ -156,9 +158,10 @@ pub struct FileSystemLogFileManager;
 #[pymethods]
 impl FileSystemLogFileManager {
     #[new]
-    fn new(log_directory: std::path::PathBuf) -> (Self, LogFileManager) {
-        let z = janitor::logs::FileSystemLogFileManager::new(log_directory);
-        (FileSystemLogFileManager, LogFileManager(Arc::new(z)))
+    fn new(log_directory: std::path::PathBuf) -> PyResult<(Self, LogFileManager)> {
+        let z = janitor::logs::FileSystemLogFileManager::new(log_directory)
+            .map_err(convert_logs_error_to_py)?;
+        Ok((FileSystemLogFileManager, LogFileManager(Arc::new(z))))
     }
 }
 
