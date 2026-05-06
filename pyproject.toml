@@ -229,8 +229,6 @@ include = ["janitor*"]
     "_static/*.js",
     "_static/*.png",
 ]
-janitor = ["state.sql"]
-"janitor.debian" = ["debian.sql"]
 
 [tool.setuptools.dynamic]
 version = {attr = "janitor.__version__"}

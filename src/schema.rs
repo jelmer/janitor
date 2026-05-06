@@ -1,8 +1,8 @@
 /// Core janitor database schema
-pub const CORE_SCHEMA: &str = include_str!("../py/janitor/state.sql");
+pub const CORE_SCHEMA: &str = include_str!("../schema/state.sql");
 
 /// Debian-specific database schema extensions
-pub const DEBIAN_SCHEMA: &str = include_str!("../py/janitor/debian/debian.sql");
+pub const DEBIAN_SCHEMA: &str = include_str!("../schema/debian/debian.sql");
 
 #[cfg(feature = "testing")]
 /// Set up a test database with core janitor schema
