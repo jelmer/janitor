@@ -9,3 +9,4 @@ bin/
 man/
 *~
 .git/
+target/
