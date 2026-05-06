@@ -1,5 +1,6 @@
 use super::*;
 
+// Tests for existing data files
 #[test]
 fn test_parse_github_merged_email() {
     let email = include_bytes!("../tests/data/github-merged-email.txt");
@@ -20,99 +21,129 @@ fn test_parse_gitlab_merged_email() {
     );
 }
 
+// Unit tests for parse_plain_text_body
 #[test]
-fn test_parse_plain_text_github_reply() {
-    let text = "Some review comments\n\
-                Reply to this email directly or view it on GitHub:\n\
-                https://github.com/owner/repo/pull/42#issuecomment-12345\n";
+fn test_parse_plain_text_body_github() {
+    let text = r#"Some header text
+Reply to this email directly or view it on GitHub:
+https://github.com/user/repo/pull/123#issuecomment-456
+Footer text"#;
+
+    let result = parse_plain_text_body(text);
     assert_eq!(
-        parse_plain_text_body(text),
-        Some("https://github.com/owner/repo/pull/42".to_string())
+        result,
+        Some("https://github.com/user/repo/pull/123".to_string())
     );
 }
 
 #[test]
-fn test_parse_plain_text_launchpad() {
-    let text = "Someone proposed a merge.\n\
-                For more details, see:\n\
-                https://code.launchpad.net/~user/project/+branch/trunk/+merge/12345\n";
+fn test_parse_plain_text_body_launchpad() {
+    let text = r#"Subject: Test
+For more details, see:
+https://code.launchpad.net/~user/project/+merge/123456
+Thanks"#;
+
+    let result = parse_plain_text_body(text);
     assert_eq!(
-        parse_plain_text_body(text),
-        Some("https://code.launchpad.net/~user/project/+branch/trunk/+merge/12345".to_string())
+        result,
+        Some("https://code.launchpad.net/~user/project/+merge/123456".to_string())
     );
 }
 
 #[test]
-fn test_parse_plain_text_merge_request_url_field() {
-    let text = "Subject: Review request\n\
-                Merge Request URL: https://code.example.com/mr/99\n\
-                Some other text\n";
+fn test_parse_plain_text_body_gitlab() {
+    let text = r#"Hello,
+Merge Request Url: https://gitlab.com/user/project/-/merge_requests/789
+Best regards"#;
+
+    let result = parse_plain_text_body(text);
     assert_eq!(
-        parse_plain_text_body(text),
-        Some("https://code.example.com/mr/99".to_string())
+        result,
+        Some("https://gitlab.com/user/project/-/merge_requests/789".to_string())
     );
 }
 
 #[test]
-fn test_parse_plain_text_merge_request_url_field_case_insensitive() {
-    let text = "merge request url: https://code.example.com/mr/100\n";
+fn test_parse_plain_text_body_gitlab_case_insensitive() {
+    let text = r#"Hello,
+merge request URL: https://gitlab.com/user/project/-/merge_requests/789
+Best regards"#;
+
+    let result = parse_plain_text_body(text);
     assert_eq!(
-        parse_plain_text_body(text),
-        Some("https://code.example.com/mr/100".to_string())
+        result,
+        Some("https://gitlab.com/user/project/-/merge_requests/789".to_string())
     );
 }
 
 #[test]
-fn test_parse_plain_text_no_match() {
-    let text = "Just a regular email with no merge proposal URLs.\n\
-                Nothing to see here.\n";
-    assert_eq!(parse_plain_text_body(text), None);
+fn test_parse_plain_text_body_no_url() {
+    let text = r#"This is a regular email
+Without any merge request URLs
+Just normal text"#;
+
+    let result = parse_plain_text_body(text);
+    assert_eq!(result, None);
 }
 
 #[test]
-fn test_parse_html_json_ld_view_action() {
+fn test_parse_plain_text_body_empty() {
+    let result = parse_plain_text_body("");
+    assert_eq!(result, None);
+}
+
+// Unit tests for parse_html_body
+#[test]
+fn test_parse_html_body_github() {
     let html = r#"<html>
-    <head>
-        <script type="application/ld+json">
-        {
-            "@context": "https://schema.org",
-            "@type": "EmailMessage",
-            "potentialAction": {
-                "@type": "ViewAction",
-                "url": "https://github.com/owner/repo/pull/5#event-999"
-            }
-        }
-        </script>
-    </head>
-    <body>Email body</body>
-    </html>"#;
+<head>
+<script type="application/ld+json">
+{
+    "@context": "http://schema.org",
+    "@type": "EmailMessage",
+    "potentialAction": {
+        "@type": "ViewAction",
+        "url": "https://github.com/user/repo/pull/123",
+        "name": "View Pull Request"
+    }
+}
+</script>
+</head>
+<body>Pull request notification</body>
+</html>"#;
+
+    let result = parse_html_body(html);
     assert_eq!(
-        parse_html_body(html),
-        Some("https://github.com/owner/repo/pull/5".to_string())
+        result,
+        Some("https://github.com/user/repo/pull/123".to_string())
     );
 }
 
 #[test]
-fn test_parse_html_json_ld_http_schema() {
+fn test_parse_html_body_no_script() {
     let html = r#"<html>
-    <head>
-        <script type="application/ld+json">
-        {
-            "@context": "http://schema.org",
-            "@type": "EmailMessage",
-            "action": {
-                "@type": "ViewAction",
-                "url": "https://github.com/owner/repo/pull/10"
-            }
-        }
-        </script>
-    </head>
-    <body>Email body</body>
-    </html>"#;
-    assert_eq!(
-        parse_html_body(html),
-        Some("https://github.com/owner/repo/pull/10".to_string())
-    );
+<body>
+<p>Just a regular HTML email</p>
+</body>
+</html>"#;
+
+    let result = parse_html_body(html);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_parse_html_body_invalid_json() {
+    let html = r#"<html>
+<head>
+<script type="application/ld+json">
+{ invalid json
+</script>
+</head>
+<body>test</body>
+</html>"#;
+
+    let result = parse_html_body(html);
+    assert_eq!(result, None);
 }
 
 #[test]
@@ -136,12 +167,6 @@ fn test_parse_html_json_ld_array() {
         parse_html_body(html),
         Some("https://github.com/owner/repo/pull/7".to_string())
     );
-}
-
-#[test]
-fn test_parse_html_no_json_ld() {
-    let html = r#"<html><body>Just a regular email</body></html>"#;
-    assert_eq!(parse_html_body(html), None);
 }
 
 #[test]
@@ -179,4 +204,87 @@ fn test_parse_html_wrong_action_type() {
     <body>Email body</body>
     </html>"#;
     assert_eq!(parse_html_body(html), None);
+}
+
+// Unit tests for parse_json_ld
+#[test]
+fn test_parse_json_ld_valid() {
+    let json = serde_json::json!({
+        "@context": "https://schema.org",
+        "@type": "EmailMessage",
+        "potentialAction": {
+            "@type": "ViewAction",
+            "url": "https://github.com/user/repo/pull/456#comment"
+        }
+    });
+
+    let result = parse_json_ld(&json);
+    assert_eq!(
+        result,
+        Some("https://github.com/user/repo/pull/456".to_string())
+    );
+}
+
+#[test]
+fn test_parse_json_ld_array() {
+    let json = serde_json::json!([
+        {
+            "@context": "https://schema.org",
+            "@type": "EmailMessage",
+            "potentialAction": {
+                "@type": "ViewAction",
+                "url": "https://github.com/user/repo/pull/789"
+            }
+        }
+    ]);
+
+    let result = parse_json_ld(&json);
+    assert_eq!(
+        result,
+        Some("https://github.com/user/repo/pull/789".to_string())
+    );
+}
+
+#[test]
+fn test_parse_json_ld_wrong_type() {
+    let json = serde_json::json!({
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "potentialAction": {
+            "@type": "ViewAction",
+            "url": "https://github.com/user/repo/pull/123"
+        }
+    });
+
+    let result = parse_json_ld(&json);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_parse_json_ld_wrong_action_type() {
+    let json = serde_json::json!({
+        "@context": "https://schema.org",
+        "@type": "EmailMessage",
+        "potentialAction": {
+            "@type": "EditAction",
+            "url": "https://github.com/user/repo/pull/123"
+        }
+    });
+
+    let result = parse_json_ld(&json);
+    assert_eq!(result, None);
+}
+
+#[test]
+fn test_parse_json_ld_missing_url() {
+    let json = serde_json::json!({
+        "@context": "https://schema.org",
+        "@type": "EmailMessage",
+        "potentialAction": {
+            "@type": "ViewAction"
+        }
+    });
+
+    let result = parse_json_ld(&json);
+    assert_eq!(result, None);
 }
