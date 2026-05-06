@@ -26,7 +26,9 @@ pub fn parse_plain_text_body(text: &str) -> Option<String> {
             return Some(url.to_string());
         }
         if line == &"For more details, see:"
-            && lines.get(i + 1).is_some_and(|l| l.starts_with("https://code.launchpad.net/"))
+            && lines
+                .get(i + 1)
+                .is_some_and(|l| l.starts_with("https://code.launchpad.net/"))
         {
             return Some(lines[i + 1].to_string());
         }
