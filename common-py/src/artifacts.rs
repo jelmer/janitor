@@ -1,6 +1,6 @@
 use crate::io::Readable;
 use pyo3::create_exception;
-use pyo3::exceptions::{PyRuntimeError, PyTimeoutError};
+use pyo3::exceptions::{PyRuntimeError, PyTimeoutError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyAny;
 use std::sync::Arc;
@@ -25,6 +25,7 @@ fn artifact_err_to_py_err(e: janitor::artifacts::Error) -> PyErr {
             ArtifactsMissing::new_err("Artifacts missing")
         }
         janitor::artifacts::Error::IoError(e) => e.into(),
+        janitor::artifacts::Error::InvalidPath => PyValueError::new_err("Invalid path"),
         janitor::artifacts::Error::Other(e) => PyRuntimeError::new_err(e),
     }
 }
