@@ -639,9 +639,9 @@ checksum = "36f64beae40a84da1b4b26ff2761a5b895c12adc41dc25aaee1c4f2bbfe97a6e"
 
 [[package]]
 name = "breezyshim"
-version = "0.7.13"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "903de5d500b02e67394b9f623e33aaac2d6721c26e5f94f334b987d2a8a2bf8d"
+checksum = "d7e782dc8df776a75906f5ea38bdeeff9347ce490ab9b2bdc6858b10d7b3566b"
 dependencies = [
  "chrono",
  "ctor",
@@ -679,9 +679,9 @@ dependencies = [
 
 [[package]]
 name = "buildlog-consultant"
-version = "0.1.6"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50324c3ad854c871ca4ab1cbe294da8d4c568ca142cede41d46353b11e05602c"
+checksum = "b2c50c6ae11ac565a6e7c580a2b696e6e25e5af032258275fbc8a6cbff48a1e3"
 dependencies = [
  "chrono",
  "clap",
@@ -2946,6 +2946,7 @@ dependencies = [
  "async-compression",
  "async-trait",
  "axum",
+ "base64",
  "breezyshim",
  "buildlog-consultant",
  "bytes",
@@ -3362,9 +3363,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
-version = "0.2.184"
+version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "libm"
@@ -3834,9 +3835,9 @@ dependencies = [
 
 [[package]]
 name = "ognibuild"
-version = "0.2.11"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c21dd34631362b87a2e7e37cfe32354cdb89a99271790c381461c9d967c68b17"
+checksum = "a12edafba3ae9b1df29a26eebe8c28fe72a5ca5941203e06d1daf72e59de993f"
 dependencies = [
  "apt-sources",
  "breezyshim",
@@ -5593,9 +5594,9 @@ dependencies = [
 
 [[package]]
 name = "silver-platter"
-version = "0.8.3"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6af71853889df9b1bdfab0e88870eb18742e38d8472212bbaa794c6e1da4303"
+checksum = "ecdd5968f19209d29d4e2269f3bf0522e4d2efa4378f57b9f468afcb9705d2b9"
 dependencies = [
  "breezyshim",
  "chrono",

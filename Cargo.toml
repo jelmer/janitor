@@ -67,7 +67,7 @@ google-cloud-gax = "1.4.0"
 bytes = "1"
 tempfile = "3"
 redis = { version = "1", features = ["aio", "connection-manager", "tokio-comp"] }
-sqlx = { version = "^0.8", features = ["chrono", "postgres", "runtime-async-std-native-tls"] }
+sqlx = { version = "^0.8", features = ["chrono", "derive", "macros", "migrate", "postgres", "runtime-async-std-native-tls"] }
 sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
 sqlx-core = { version = "^0.8", features = ["chrono"] }
 pyo3 = { version = "0.28" }
@@ -83,10 +83,11 @@ url = "2"
 chrono = "0.4"
 clap = { version = "4" }
 tokio = "1"
+tokio-stream = "0.1"
 axum = "0.8"
 maplit = "1"
 #silver-platter = { git = "https://github.com/jelmer/silver-platter" }
-silver-platter = { version = "0.8.3" }
+silver-platter = { version = "0.8.4" }
 ognibuild = { version = "0.2.11", default-features = false, features = ["debian", "breezy"] }
 shlex = "1"
 buildlog-consultant = "0.1.1"
@@ -94,6 +95,9 @@ deb822-lossless = "0.5.6"
 debian-control = "0.3"
 pyo3-filelike = "0.5"
 pyo3-async-runtimes = "0.28"
+tower = "0.5"
+tracing = "0.1"
+base64 = "0.22"
 
 [build-dependencies]
 protobuf-codegen = "3"
