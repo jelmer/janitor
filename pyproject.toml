@@ -65,6 +65,9 @@ requires-python = ">=3.9"
 dependencies = [
     "aiohttp",
     "aiohttp-apispec",
+    # apispec 6.10 still uses marshmallow.__version__ which was removed in
+    # marshmallow 4. https://github.com/marshmallow-code/apispec/issues
+    "marshmallow<4",
     "aiohttp-jinja2",
     "aiohttp-openmetrics",
     "aiojobs",
