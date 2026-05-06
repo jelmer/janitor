@@ -1175,12 +1175,22 @@ pub fn iter_all_mps(
         breezyshim::forge::MergeProposalStatus::Closed,
         breezyshim::forge::MergeProposalStatus::Merged,
     ]);
-    breezyshim::forge::iter_forge_instances().flat_map(|instance| {
+    breezyshim::forge::iter_forge_instances().flat_map(move |instance| {
         statuses.iter().flat_map(move |status| {
-            let proposals = instance.iter_my_proposals(Some(*status), None).unwrap();
             let value = instance.clone();
-
-            proposals.map(move |proposal| Ok((value.clone(), proposal, *status)))
+            let status = *status;
+            // `iter_my_proposals_lazy` surfaces both the initial call's
+            // error and any per-item Python errors (e.g. GitHub plugin
+            // raising auth-required lazily on first __next__) — earlier
+            // versions of breezyshim panicked instead.
+            let iter: Box<dyn Iterator<Item = Result<_, _>> + Send> =
+                match instance.iter_my_proposals_lazy(Some(status), None) {
+                    Ok(proposals) => Box::new(
+                        proposals.map(move |proposal| proposal.map(|p| (value.clone(), p, status))),
+                    ),
+                    Err(e) => Box::new(std::iter::once(Err(e))),
+                };
+            iter
         })
     })
 }
