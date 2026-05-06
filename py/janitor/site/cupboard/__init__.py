@@ -611,10 +611,10 @@ async def handle_done_proposals(request):
     return {"oldest": oldest, "runs": runs, "since": since}
 
 
-_extra_cupboard_links = []
+_extra_cupboard_links: list[tuple[str, str]] = []
 
 
-def register_cupboard_link(title, shortlink):
+def register_cupboard_link(title: str, shortlink: str) -> None:
     _extra_cupboard_links.append((title, shortlink))
 
 
