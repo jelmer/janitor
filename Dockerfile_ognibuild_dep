@@ -40,7 +40,7 @@ RUN apt-get update --yes \
  && apt-get clean \
  && git clone https://github.com/jelmer/ognibuild.git /code/ \
  && cd /code/ \
- && cargo build --verbose --release #-p dep-server
+ && cargo build --verbose --release --features debian --bin dep-server
 
 
 
