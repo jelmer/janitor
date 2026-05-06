@@ -191,6 +191,8 @@ pub(crate) fn build(
                         stage.push(name);
                     }
                     Phase::CreateSession => stage.push("create-session".to_string()),
+                    Phase::Unpack => stage.push("unpack".to_string()),
+                    Phase::AptGetUpdate => stage.push("apt-get-update".to_string()),
                 }
                 return Err(BuildFailure {
                     code: e.kind().to_string(),
