@@ -1,1 +1,4 @@
 - Split out generic code from debian-janitor specific bits
+- Pass tracing context everywhere
+- Use common infrastructure for passing through trace ids
+ + Update breezy to all trace ids to be passed in
