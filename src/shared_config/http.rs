@@ -1,10 +1,7 @@
 //! Shared HTTP client configuration and factory for Janitor services
 
+use crate::utils::service_user_agent;
 use base64::prelude::*;
-
-fn service_user_agent(service_name: &str) -> String {
-    format!("{}/{}", service_name, env!("CARGO_PKG_VERSION"))
-}
 use reqwest::{Client, ClientBuilder};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
