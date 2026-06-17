@@ -147,7 +147,7 @@ pub fn get_branch_vcs_type(branch: &dyn Branch) -> Result<VcsType, BrzError> {
     match repository.vcs_type() {
         breezyshim::foreign::VcsType::Git => Ok(VcsType::Git),
         breezyshim::foreign::VcsType::Bazaar => Ok(VcsType::Bzr),
-        other => panic!("Unknown VCS type: {:?}", other),
+        other => Err(BrzError::UnsupportedVcs(format!("{:?}", other))),
     }
 }
 

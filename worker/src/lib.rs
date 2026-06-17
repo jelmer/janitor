@@ -246,8 +246,17 @@ pub fn run_worker(
             }
         };
         metadata.branch_url = Some(main_branch.as_ref().unwrap().get_user_url());
-        metadata.vcs_type =
-            Some(janitor::vcs::get_branch_vcs_type(main_branch.as_ref().unwrap()).unwrap());
+        metadata.vcs_type = Some(
+            janitor::vcs::get_branch_vcs_type(main_branch.as_ref().unwrap()).map_err(|e| {
+                WorkerFailure {
+                    code: "vcs-type-unsupported".to_owned(),
+                    description: format!("Unable to determine VCS type: {}", e),
+                    stage: vec!["setup".to_owned()],
+                    transient: Some(false),
+                    details: None,
+                }
+            })?,
+        );
         metadata.subpath = Some(subpath.to_string_lossy().to_string());
         empty_format = None;
     } else {
@@ -761,7 +770,16 @@ pub fn run_worker(
         metadata.add_tag(n.to_string(), r.clone());
     }
 
-    let actual_vcs_type = janitor::vcs::get_branch_vcs_type(&ws.local_tree().branch()).unwrap();
+    let actual_vcs_type =
+        janitor::vcs::get_branch_vcs_type(&ws.local_tree().branch()).map_err(|e| {
+            WorkerFailure {
+                code: "vcs-type-unsupported".to_owned(),
+                description: format!("Unable to determine VCS type: {}", e),
+                stage: vec!["result-push".to_owned()],
+                transient: Some(false),
+                details: None,
+            }
+        })?;
 
     let vcs_type = if vcs_type.is_none() {
         actual_vcs_type
