@@ -257,12 +257,28 @@ pub async fn run_debdiff(
     }
 
     let output = cmd.output().await?;
-    if !output.status.success() {
-        return Err(DebdiffError {
-            message: String::from_utf8_lossy(&output.stderr).to_string(),
-        });
-    }
+    check_debdiff_status(output.status.code(), &output.stderr)?;
     Ok(output.stdout)
+}
+
+/// Classify a `debdiff` exit status.
+///
+/// debdiff(1) exits 0 when the packages are identical and 1 when it found
+/// differences; the latter is the normal, expected outcome rather than an
+/// error. Any other code is a genuine failure (missing file, malformed
+/// package, etc). The diff itself goes to stdout, so on a real failure the
+/// stderr text is what describes the problem.
+fn check_debdiff_status(code: Option<i32>, stderr: &[u8]) -> Result<(), DebdiffError> {
+    match code {
+        Some(0) | Some(1) => Ok(()),
+        other => Err(DebdiffError {
+            message: format!(
+                "debdiff exited with status {:?}: {}",
+                other,
+                String::from_utf8_lossy(stderr).trim()
+            ),
+        }),
+    }
 }
 
 pub fn debdiff_is_empty(debdiff: &str) -> bool {
@@ -404,6 +420,34 @@ pub fn htmlize_debdiff(debdiff: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_check_debdiff_status_identical() {
+        assert!(check_debdiff_status(Some(0), b"").is_ok());
+    }
+
+    #[test]
+    fn test_check_debdiff_status_differences_found() {
+        // debdiff exits 1 when it finds differences; this is the common case
+        // and must not be treated as an error.
+        assert!(check_debdiff_status(Some(1), b"").is_ok());
+    }
+
+    #[test]
+    fn test_check_debdiff_status_real_error() {
+        let err = check_debdiff_status(Some(2), b"debdiff: cannot read foo.deb\n").unwrap_err();
+        assert_eq!(
+            err.message,
+            "debdiff exited with status Some(2): debdiff: cannot read foo.deb"
+        );
+    }
+
+    #[test]
+    fn test_check_debdiff_status_signal() {
+        let err = check_debdiff_status(None, b"").unwrap_err();
+        assert_eq!(err.message, "debdiff exited with status None: ");
+    }
+
     #[test]
     fn test_nothing() {
         assert_eq!(
