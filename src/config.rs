@@ -32,20 +32,22 @@ impl Config {
     pub fn get_distribution(&self, name: &str) -> Option<&Distribution> {
         self.distribution
             .iter()
-            .find(|d| d.name.as_ref().unwrap() == name)
+            .find(|d| d.name.as_deref() == Some(name))
     }
 
     pub fn get_campaign(&self, name: &str) -> Option<&Campaign> {
         self.campaign
             .iter()
-            .find(|c| c.name.as_ref().unwrap() == name)
+            .find(|c| c.name.as_deref() == Some(name))
     }
 
     pub fn find_campaign_by_branch_name(&self, branch_name: &str) -> Option<(&str, &str)> {
         for campaign in &self.campaign {
             if let Some(campaign_branch_name) = &campaign.branch_name {
                 if branch_name == campaign_branch_name {
-                    return Some((campaign.name.as_ref().unwrap(), "main"));
+                    if let Some(name) = campaign.name.as_deref() {
+                        return Some((name, "main"));
+                    }
                 }
             }
         }
@@ -64,6 +66,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
     fn test_read_file() {
@@ -71,6 +74,31 @@ mod tests {
         assert_eq!(config.distribution.len(), 1);
         assert_eq!(config.campaign.len(), 8);
         assert_eq!(config.apt_repository.len(), 1);
+    }
+
+    #[test]
+    fn test_read_string() {
+        let contents = r#"distribution { name: "test" }"#;
+        let config = read_string(contents).unwrap();
+        assert_eq!(config.distribution.len(), 1);
+        assert_eq!(config.distribution[0].name, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_read_readable() {
+        let contents = r#"distribution { name: "test" }"#;
+        let cursor = Cursor::new(contents.as_bytes());
+        let config = read_readable(cursor).unwrap();
+        assert_eq!(config.distribution.len(), 1);
+        assert_eq!(config.distribution[0].name, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_empty_config() {
+        let config = read_string("").unwrap();
+        assert_eq!(config.distribution.len(), 0);
+        assert_eq!(config.campaign.len(), 0);
+        assert_eq!(config.apt_repository.len(), 0);
     }
 
     #[test]
