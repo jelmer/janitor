@@ -64,6 +64,13 @@ impl Run {
         self.finish_time - self.start_time
     }
 
+    /// Look up a result branch by role, returning
+    /// `(remote_name, base_revision, revision)`.
+    ///
+    /// This matches Python's `get_result_branch`, which returns
+    /// `entry[1:]` of the `(role, remote_name, base_revision, revision)`
+    /// tuple. The last two fields must not be swapped: callers
+    /// destructure the result positionally.
     pub fn get_result_branch(
         &self,
         role: &str,
@@ -72,7 +79,7 @@ impl Run {
             branches
                 .iter()
                 .find(|(r, _, _, _)| r == role)
-                .map(|(_, n, br, r)| (n.clone(), r.clone(), br.clone()))
+                .map(|(_, n, base_rev, rev)| (n.clone(), base_rev.clone(), rev.clone()))
         })
     }
 }
@@ -180,10 +187,10 @@ mod tests {
     #[test]
     fn test_run_get_result_branch_found() {
         let run = make_run();
-        let (name, rev, base_rev) = run.get_result_branch("main").unwrap();
+        let (name, base_rev, rev) = run.get_result_branch("main").unwrap();
         assert_eq!(name, "refs/heads/lintian-fixes");
-        assert_eq!(rev, Some(RevisionId::from(b"tip-rev".to_vec())));
         assert_eq!(base_rev, Some(RevisionId::from(b"base-rev".to_vec())));
+        assert_eq!(rev, Some(RevisionId::from(b"tip-rev".to_vec())));
     }
 
     #[test]
@@ -202,10 +209,10 @@ mod tests {
     #[test]
     fn test_run_get_result_branch_no_revisions() {
         let run = make_run();
-        let (name, rev, base_rev) = run.get_result_branch("debian").unwrap();
+        let (name, base_rev, rev) = run.get_result_branch("debian").unwrap();
         assert_eq!(name, "refs/heads/debian");
-        assert_eq!(rev, None);
         assert_eq!(base_rev, None);
+        assert_eq!(rev, None);
     }
 
     #[test]
