@@ -30,11 +30,13 @@ RUN apt-get update --yes \
  && apt-get satisfy --yes --no-install-recommends \
         ca-certificates \
         cargo \
+        clang \
         gcc \
         git \
         libc6-dev \
         libpython3-dev \
         libssl-dev \
+        nettle-dev \
         pkg-config \
         python3-minimal \
  && apt-get clean \
