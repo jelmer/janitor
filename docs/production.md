@@ -26,5 +26,25 @@ $ cat schema/debian/debian.sql | psql janitor  # only if using the Debian-specif
 Without this, every service connects to the database successfully and then
 fails on its first query, since none of the expected tables exist yet.
 
+## Forge credentials
+
+Publishing merge proposals requires a forge API token (GitHub/GitLab/etc),
+but this is not part of janitor.conf - publish and runner delegate to
+breezy's own credential store instead:
+
+```
+~/.config/breezy/authentication.conf
+```
+
+For GitHub specifically:
+
+```
+[Github]
+scheme = https
+host = github.com
+url = https://api.github.com
+private_token = <your token>
+```
+
 For a Janitor instance, you probably want a custom website in combination with
 the Janitor API. See the existing instances for inspiration.
