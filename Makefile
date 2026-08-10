@@ -101,6 +101,8 @@ push-%:
 	buildah push ghcr.io/jelmer/janitor/$*:$(DOCKER_TAG)
 	buildah push ghcr.io/jelmer/janitor/$*:$(SHA)
 
+.PHONY: docker-all build-all push-all
+
 docker-all: $(DOCKER_TARGETS)
 
 build-all: $(BUILD_TARGETS)
