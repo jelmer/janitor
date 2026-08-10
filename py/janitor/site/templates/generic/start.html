@@ -6,5 +6,24 @@
     {{ suite }}
 {% endblock page_title %}
 {% block body %}
-    TODO
+    <div class="section" id="{{ suite }}">
+        <h1>{{ suite }}</h1>
+        <p><em>Status pages for the {{ suite }} campaign.</em></p>
+        <div class="toctree-wrapper compound">
+            <ul>
+                <li class="toctree-l1">
+                    <a class="reference internal" href="merge-proposals">Merge Proposals</a>
+                </li>
+                <li class="toctree-l1">
+                    <a class="reference internal" href="ready">Ready Changes</a>
+                </li>
+                <li class="toctree-l1">
+                    <a class="reference internal" href="done">Merged or Pushed Changes</a>
+                </li>
+                <li class="toctree-l1">
+                    <a class="reference internal" href="candidates">Candidates</a>
+                </li>
+            </ul>
+        </div>
+    </div>
 {% endblock body %}
