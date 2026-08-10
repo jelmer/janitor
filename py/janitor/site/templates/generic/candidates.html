@@ -13,6 +13,8 @@
                 <li>
                     <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
                 </li>
+            {% else %}
+                <li>No candidates yet.</li>
             {% endfor %}
         </ul>
     </div>

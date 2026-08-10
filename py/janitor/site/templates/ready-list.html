@@ -21,6 +21,8 @@
                     {% set result = run.result -%}
                     {% include [run.suite + "/summary.html", "generic/summary.html"] %}
                 </li>
+            {% else %}
+                <li>Nothing is ready to publish right now.</li>
             {% endfor %}
         </ul>
     </div>

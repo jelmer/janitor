@@ -54,6 +54,8 @@
                     {% set result = run.result -%}
                     {% include [run.campaign + "/summary.html", "generic/summary.html"] %}
                 </li>
+            {% else %}
+                <li>No changes have been merged or pushed yet.</li>
             {% endfor %}
         </ul>
     </div>
