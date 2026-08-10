@@ -46,6 +46,9 @@
             {% endfor %}
             ]
         {%- endmacro -%}
+        {% if result_codes | sum(attribute=1) == 0 %}
+            <p>No results recorded yet.</p>
+        {% else %}
         <div style="width: 400px; height: 600px;">
             <canvas id="result-code-chart" />
         </div>
@@ -132,5 +135,6 @@
                 });
             });
         </script>
+        {% endif %}
     </div>
 {% endblock body %}
