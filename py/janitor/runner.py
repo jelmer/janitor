@@ -1573,14 +1573,17 @@ class QueueProcessor:
         }
 
     async def register_run(self, active_run: ActiveRun) -> None:
-        # Ideally we'd do this check *in* the transaction, but
-        # fakeredis doesn't seem to do Pipeline.hget()
-        run_id = await self.redis.hget("assigned-queue-items", str(active_run.queue_id))
-        if run_id:
+        # HSETNX makes the claim atomic - hget then hset (below) could race
+        claimed = await self.redis.hsetnx(
+            "assigned-queue-items", str(active_run.queue_id), active_run.log_id
+        )
+        if not claimed:
+            run_id = await self.redis.hget(
+                "assigned-queue-items", str(active_run.queue_id)
+            )
             raise QueueItemAlreadyClaimed(active_run.queue_id, run_id)
         async with self.redis.pipeline() as tr:
             tr.hset("active-runs", active_run.log_id, json.dumps(active_run.json()))
-            tr.hset("assigned-queue-items", str(active_run.queue_id), active_run.log_id)
             tr.hset("last-keepalive", active_run.log_id, datetime.utcnow().isoformat())
             await tr.execute()
         await self.redis.publish("queue", json.dumps(await self.status_json()))
