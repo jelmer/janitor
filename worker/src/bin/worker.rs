@@ -180,6 +180,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     log::error!("failed to upload result: {}", e);
                     1
                 }
+                Err(janitor_worker::SingleItemError::JobPanicked(e)) => {
+                    // job panic used to kill the polling loop silently
+                    log::error!("job panicked: {}", e);
+                    1
+                }
                 Err(janitor_worker::SingleItemError::EmptyQueue) => {
                     log::info!("queue is empty");
                     // avoid busy-looping and re-spawning dpkg-architecture every iteration
