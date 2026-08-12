@@ -13,6 +13,9 @@
             This is an overview of all open merge proposals for which the
             last relevant run failed.
         </p>
+        {% if not broken_mps %}
+            <p>No merge proposals with broken runs.</p>
+        {% else %}
         <table class="docutils" border="1">
             <thead valign="bottom">
                 <tr class="row-odd">
@@ -46,5 +49,6 @@
                 {% endfor %}
             </tbody>
         </table>
+        {% endif %}
     </div>
 {% endblock body %}
