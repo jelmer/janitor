@@ -32,7 +32,7 @@ import warnings
 from collections.abc import Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any, Optional, TypedDict, cast
 
@@ -603,6 +603,15 @@ class JanitorResult:
         }
 
 
+def _naive_utc(value: str) -> datetime:
+    # worker sends aware RFC3339, the run table columns are naive - asyncpg
+    # can't mix the two, so normalize to naive UTC like datetime.utcnow() elsewhere
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 @dataclass
 class WorkerResult:
     """The result from a worker."""
@@ -691,10 +700,10 @@ class WorkerResult:
             details=worker_result.get("details"),
             stage=worker_result.get("stage"),
             builder_result=builder_result,
-            start_time=datetime.fromisoformat(worker_result["start_time"])
+            start_time=_naive_utc(worker_result["start_time"])
             if "start_time" in worker_result
             else None,
-            finish_time=datetime.fromisoformat(worker_result["finish_time"])
+            finish_time=_naive_utc(worker_result["finish_time"])
             if "finish_time" in worker_result
             else None,
             queue_id=(
