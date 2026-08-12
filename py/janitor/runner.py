@@ -2743,7 +2743,12 @@ async def next_item(
             "subpath": vcs_info.get("subpath"),
             "vcs_type": vcs_info.get("vcs_type"),
             "cached_url": cached_branch_url,
-            "additional_colocated_branches": additional_colocated_branches,
+            # normalize to a list - the worker requires Vec<String>, not a dict
+            "additional_colocated_branches": (
+                list(additional_colocated_branches)
+                if isinstance(additional_colocated_branches, dict)
+                else additional_colocated_branches
+            ),
         },
         "resume": resume.json() if resume else None,
         "build": {
