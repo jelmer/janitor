@@ -239,7 +239,7 @@ async def main_async(argv=None):
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     tasks = [
         loop.create_task(

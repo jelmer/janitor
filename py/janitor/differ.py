@@ -768,10 +768,12 @@ def main(argv=None):
 
     set_user_agent(config.user_agent)
 
-    loop = asyncio.get_event_loop()
+    asyncio.run(serve(args, config), debug=args.debug)
 
+
+async def serve(args, config):
     if args.debug:
-        loop.set_debug(True)
+        loop = asyncio.get_running_loop()
         loop.slow_callback_duration = 0.001
         warnings.simplefilter("always", ResourceWarning)
 
@@ -779,11 +781,11 @@ def main(argv=None):
         "janitor.differ", ipv4=args.listen_address, port=args.port
     )
     if config.zipkin_address:
-        tracer = loop.run_until_complete(
-            aiozipkin.create(config.zipkin_address, endpoint, sample_rate=0.1)
+        tracer = await aiozipkin.create(
+            config.zipkin_address, endpoint, sample_rate=0.1
         )
     else:
-        tracer = loop.run_until_complete(aiozipkin.create_custom(endpoint))
+        tracer = await aiozipkin.create_custom(endpoint)
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
@@ -803,15 +805,15 @@ def main(argv=None):
     aiozipkin.setup(app, tracer)
 
     runner = web.AppRunner(app)
-    loop.run_until_complete(runner.setup())
+    await runner.setup()
     site = web.TCPSite(runner, args.listen_address, port=args.port)
-    loop.run_until_complete(site.start())
+    await site.start()
 
     if config.redis_location:
         redis = Redis.from_url(config.redis_location)
-        loop.create_task(listen_to_runner(redis, config.database_location, app))
+        asyncio.create_task(listen_to_runner(redis, config.database_location, app))
 
-    loop.run_forever()
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
