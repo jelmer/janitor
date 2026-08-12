@@ -8,14 +8,16 @@
 {% block body %}
     <div class="section" id="candidates">
         <h1>{{ suite }} - Candidates</h1>
-        <ul>
-            {% for codebase, value in candidates %}
-                <li>
-                    <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
-                </li>
-            {% else %}
-                <li>No candidates yet.</li>
-            {% endfor %}
-        </ul>
+        {% if candidates %}
+            <ul>
+                {% for codebase, value in candidates %}
+                    <li>
+                        <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No candidates yet.</p>
+        {% endif %}
     </div>
 {% endblock body %}
