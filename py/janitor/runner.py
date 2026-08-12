@@ -1884,6 +1884,10 @@ async def handle_schedule(request):
         except CandidateUnavailable as e:
             raise web.HTTPBadRequest(text="Candidate not available") from e
 
+    queue_position, queue_wait_time, _cum_wait_time = await request.app[
+        "queue_processor"
+    ].estimate_wait(codebase, campaign)
+
     response_obj = {
         "campaign": campaign,
         "offset": offset,
@@ -1892,6 +1896,10 @@ async def handle_schedule(request):
         "queue_id": queue_id,
         "estimated_duration_seconds": estimated_duration.total_seconds()
         if estimated_duration
+        else None,
+        "queue_position": queue_position,
+        "queue_wait_time": queue_wait_time.total_seconds()
+        if queue_wait_time is not None
         else None,
     }
     return web.json_response(response_obj)
