@@ -36,6 +36,7 @@ RUN apt-get update --yes \
         iproute2 \
  && apt-get upgrade --yes \
  && apt-get satisfy --yes --no-install-recommends \
+        ca-certificates \
         libpython3-dev \
         python3-breezy \
         dpkg-dev \
