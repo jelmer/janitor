@@ -38,6 +38,7 @@ RUN apt-get update --yes \
  && apt-get satisfy --yes --no-install-recommends \
         libpython3-dev \
         python3-breezy \
+        brz-debian \
         dpkg-dev \
  && apt-get clean
 
