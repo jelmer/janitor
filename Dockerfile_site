@@ -23,6 +23,8 @@ RUN apt-get update --yes \
         protobuf-compiler \
        ## Extra packages
         libjs-jquery-datatables \
+        libjs-jquery-typeahead \
+        libjs-moment \
         python3-gpg \
         python3-pip \
  && apt-get clean
