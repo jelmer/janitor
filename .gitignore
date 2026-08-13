@@ -11,6 +11,7 @@ _build/*
 *~
 site/_build
 state.db
+/janitor.conf
 site/history.rst
 build.log
 debian_janitor.egg-info/
