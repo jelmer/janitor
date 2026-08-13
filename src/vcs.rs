@@ -1310,13 +1310,8 @@ pub fn get_vcs_managers(
 ) -> Result<HashMap<VcsType, Box<dyn VcsManager>>, url::ParseError> {
     if !location.contains("=") {
         let base_url = Url::parse(location)?;
-        // Url::join() replaces the last path segment when the base has no
-        // trailing slash, instead of appending to it. Without the trailing
-        // slash here, every RemoteGitVcsManager/RemoteBzrVcsManager built
-        // from this ends up with a base_url like ".../git" (no trailing
-        // slash), so its own get_repository_url()/get_branch_url() calls
-        // (which do self.base_url.join(codebase)) silently replace "git"
-        // with the codebase name instead of appending to it.
+        // Trailing slash matters - Url::join() replaces the last segment
+        // instead of appending, silently dropping "git"/"bzr" otherwise.
         let git_url = base_url.join("git/")?;
         let bzr_url = base_url.join("bzr/")?;
 
