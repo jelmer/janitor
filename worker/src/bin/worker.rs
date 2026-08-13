@@ -182,6 +182,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Err(janitor_worker::SingleItemError::EmptyQueue) => {
                     log::info!("queue is empty");
+                    // avoid busy-looping and re-spawning dpkg-architecture every iteration
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     0
                 }
                 Ok(_) => 0,
