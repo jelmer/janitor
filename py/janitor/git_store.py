@@ -310,6 +310,9 @@ async def cgit_backend(request: web.Request) -> web.Response:
         env["CONTENT_TYPE"] = request.content_type
 
     for key, value in request.headers.items():
+        if key.lower() == "content-encoding":
+            # aiohttp already decompressed the body; http-backend would double-decode it
+            continue
         env["HTTP_" + key.replace("-", "_").upper()] = value
 
     p = await asyncio.create_subprocess_exec(
