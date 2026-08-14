@@ -110,12 +110,12 @@ def get_vcs_managers_from_config(config) -> dict[str, VcsManager]:  # type: igno
                 config.git_location,
             )
     if config.bzr_location:
-        parsed = urlutils.URL.from_string(config.git_location)
+        parsed = urlutils.URL.from_string(config.bzr_location)
         if parsed.scheme in ("", "file"):
             ret["bzr"] = LocalBzrVcsManager(parsed.path)
         else:
             ret["bzr"] = RemoteBzrVcsManager(
-                config.git_location,
+                config.bzr_location,
             )
     return ret
 
