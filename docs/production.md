@@ -30,13 +30,17 @@ fails on its first query, since none of the expected tables exist yet.
 
 Publishing merge proposals requires a forge API token (GitHub/GitLab/etc),
 but this is not part of janitor.conf - publish and runner delegate to
-breezy's own credential store instead:
+breezy's own credential store instead, at
+`~/.config/breezy/authentication.conf`.
 
-```
-~/.config/breezy/authentication.conf
+For GitHub, run:
+
+```console
+$ brz github-login
 ```
 
-For GitHub specifically:
+which prompts for a username and token and writes the `[Github]` section
+itself. To do it by hand instead, the section breezy expects is:
 
 ```
 [Github]
