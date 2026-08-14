@@ -1062,7 +1062,7 @@ class PollingBackchannel(Backchannel):
                     raise_for_status=True,
                     timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT),
                 ) as resp:
-                    log_id = (await resp.read()).decode()
+                    log_id = await resp.json()
             except (
                 ClientConnectorError,
                 ClientResponseError,
