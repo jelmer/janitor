@@ -113,7 +113,7 @@
                             <!-- TODO(jelmer): Link to logs -->
                         </tr>
                     {% else %}
-                        <tr><td colspan="{% if is_admin %}8{% else %}7{% endif %}">Nothing is currently being processed.</td></tr>
+                        <tr><td colspan="{%- if is_admin -%}8{%- else -%}7{%- endif -%}">Nothing is currently being processed.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
