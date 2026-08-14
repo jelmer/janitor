@@ -2635,6 +2635,14 @@ async def next_item(
                         except asyncio.TimeoutError:
                             logging.debug("Timeout opening resume branch")
                             resume_branch = None
+                        except ForgeLoginRequired as e:
+                            # resume-branch check is an optimization, not a requirement
+                            logging.debug(
+                                "No credentials for forge, can't check for "
+                                "resume branch: %s",
+                                e,
+                            )
+                            resume_branch = None
                 else:
                     resume_branch = None
         else:
