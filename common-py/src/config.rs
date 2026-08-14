@@ -205,7 +205,7 @@ impl Campaign {
     }
 
     #[getter]
-    pub fn merge_propsoal(&self) -> Option<MergeProposalConfig> {
+    pub fn merge_proposal(&self) -> Option<MergeProposalConfig> {
         self.0
             .merge_proposal
             .as_ref()

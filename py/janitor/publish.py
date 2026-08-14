@@ -1662,7 +1662,9 @@ async def publish_request(request):
     if mode:
         branches = [(r, mode) for r in roles]
     else:
-        branches = [(r, publish_policy.get(r, (MODE_SKIP, None))[0]) for r in roles]
+        branches = [
+            (r, (publish_policy or {}).get(r, (MODE_SKIP, None))[0]) for r in roles
+        ]
 
     publish_ids = {}
     for role, mode in branches:
