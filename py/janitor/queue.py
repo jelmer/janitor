@@ -180,8 +180,14 @@ LIMIT 1
         vcs_info = {}
         if row["branch_url"]:
             vcs_info["branch_url"] = row["branch_url"]
-        if row["subpath"] is not None:
-            vcs_info["subpath"] = row["subpath"]
+        # subpath is a required (non-Option) PathBuf on the worker side - a
+        # missing key here (the previous behavior, only setting it when the
+        # DB column was non-NULL) meant the runner had to guess a default
+        # at JSON-serialization time instead of the actual source of truth
+        # having a real value. Default to "" (not ".", see the worker-side
+        # fix this pairs with) so codebase.subpath being NULL still yields
+        # a valid, always-present string on the wire.
+        vcs_info["subpath"] = row["subpath"] or ""
         if row["vcs_type"]:
             vcs_info["vcs_type"] = row["vcs_type"]
         return QueueItem.from_row(row), vcs_info
