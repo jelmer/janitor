@@ -26,6 +26,16 @@ $ cat schema/debian/debian.sql | psql janitor  # only if using the Debian-specif
 Without this, every service connects to the database successfully and then
 fails on its first query, since none of the expected tables exist yet.
 
+Workers authenticate against the runner with HTTP Basic Auth, checked against
+the `worker` table (`check_worker_creds()` in `worker_creds.py`). Passwords
+are hashed with pgcrypto:
+
+```console
+$ psql janitor -c "INSERT INTO worker (name, password) VALUES ('myworker', crypt('mypassword', gen_salt('bf')))"
+```
+
+Without this, no worker can ever authenticate to `/assignment`.
+
 ## Forge credentials
 
 Publishing merge proposals requires a forge API token (GitHub/GitLab/etc),
@@ -48,6 +58,19 @@ scheme = https
 host = github.com
 url = https://api.github.com
 private_token = <your token>
+```
+
+`git_store`'s public port also requires Basic auth for `git-receive-pack`
+(push) - see `is_worker()` in `git_store.py`. Without a matching entry,
+every worker push 401s:
+
+```
+[git_store]
+scheme = http
+host = localhost
+port = 9924
+user = myworker
+password = mypassword
 ```
 
 For a Janitor instance, you probably want a custom website in combination with
