@@ -46,7 +46,16 @@ RUN apt-get update --yes \
         sbuild \
         schroot \
         mmdebstrap \
- && apt-get clean
+ && apt-get clean \
+ && sed -i \
+        's/shutil.rmtree(self._rootdir)/shutil.rmtree(self._rootdir, ignore_errors=True)/' \
+        /usr/lib/python3/dist-packages/breezy/plugins/debian/apt_repo.py
+
+# breezy-debian apt_repo.py TOCTOU race: shutil.rmtree in __exit__ vs
+# python-apt still holding the tempdir open. ignore_errors=True is safe,
+# cleanup-only. Third-party bug, not for jelmer/janitor. Proper fix is
+# upstream at breezy-team/breezy-debian#43 (closes the apt.Cache before
+# rmtree); drop this once that lands and ships in Debian testing.
 
 # unshare mode is the only sbuild chroot mode that works unprivileged in a rootless container
 RUN echo "root:1:65535" > /etc/subuid \
