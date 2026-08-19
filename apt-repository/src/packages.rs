@@ -44,6 +44,9 @@ pub fn new_package(
         sha256: None,
         sha512: None,
         description_md5: None,
+        multi_arch: None,
+        origin: None,
+        task: None,
     }
 }
 

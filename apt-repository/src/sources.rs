@@ -39,11 +39,13 @@ pub fn new_source(package: &str, version: &str, architecture: &str, directory: &
         priority: None,
         section: None,
         format: None,
-        package_list: vec![],
+        package_list: None,
         files: None,
         checksums_sha1: None,
         checksums_sha256: None,
         checksums_sha512: None,
+        extra_source_only: None,
+        uploaders: None,
     }
 }
 
