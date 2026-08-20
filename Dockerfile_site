@@ -22,6 +22,7 @@ RUN apt-get update --yes \
         pkg-config \
         protobuf-compiler \
        ## Extra packages
+        libjs-chart.js \
         libjs-jquery-datatables \
         python3-gpg \
         python3-pip \
