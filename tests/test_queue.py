@@ -45,4 +45,4 @@ async def test_vcs_only(con):
     assert queue_item
     assert queue_item.codebase == "foo"
     assert queue_item.campaign == "bar"
-    assert vcs_info == {"vcs_type": "git"}
+    assert vcs_info == {"vcs_type": "git", "subpath": ""}
