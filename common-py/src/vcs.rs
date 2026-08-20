@@ -291,9 +291,10 @@ pub fn get_vcs_manager(py: Python, name: &str, location: &str) -> PyResult<Py<Py
 #[pyfunction]
 pub fn get_vcs_managers(py: Python, location: &str) -> PyResult<HashMap<String, Py<PyAny>>> {
     if !location.contains('=') {
+        // trailing slash needed - Url::join() drops the last segment otherwise
         Ok(maplit::hashmap! {
-            "bzr".to_string() => get_vcs_manager(py, "bzr", &(location.trim_end_matches('/').to_owned() + "/bzr")).unwrap(),
-            "git".to_string() => get_vcs_manager(py, "git", &(location.trim_end_matches('/').to_owned() + "/git")).unwrap(),
+            "bzr".to_string() => get_vcs_manager(py, "bzr", &(location.trim_end_matches('/').to_owned() + "/bzr/")).unwrap(),
+            "git".to_string() => get_vcs_manager(py, "git", &(location.trim_end_matches('/').to_owned() + "/git/")).unwrap(),
         })
     } else {
         let mut managers = std::collections::HashMap::new();

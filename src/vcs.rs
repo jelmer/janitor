@@ -1310,8 +1310,10 @@ pub fn get_vcs_managers(
 ) -> Result<HashMap<VcsType, Box<dyn VcsManager>>, url::ParseError> {
     if !location.contains("=") {
         let base_url = Url::parse(location)?;
-        let git_url = base_url.join("git")?;
-        let bzr_url = base_url.join("bzr")?;
+        // Trailing slash matters - Url::join() replaces the last segment
+        // instead of appending, silently dropping "git"/"bzr" otherwise.
+        let git_url = base_url.join("git/")?;
+        let bzr_url = base_url.join("bzr/")?;
 
         Ok(vec![
             (
