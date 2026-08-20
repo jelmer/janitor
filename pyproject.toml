@@ -298,3 +298,7 @@ format_css=true
 format_js=false
 ignore="J018,H030,H031,H021"
 profile="jinja"
+
+# H025 false-positives on <div id="queue"> - the tag nesting is correctly balanced
+[tool.djlint.per-file-ignores]
+"py/janitor/site/templates/cupboard/queue.html" = "H025"
