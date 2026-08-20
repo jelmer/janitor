@@ -42,6 +42,7 @@ RUN apt-get update --yes \
         python3-breezy \
         brz-debian \
         dpkg-dev \
+        debhelper \
         lintian \
         sbuild \
         schroot \
@@ -52,6 +53,14 @@ RUN apt-get update --yes \
 RUN echo "root:1:65535" > /etc/subuid \
  && echo "root:1:65535" > /etc/subgid \
  && echo '$chroot_mode = "unshare";' >> /etc/sbuild/sbuild.conf
+
+# lintian-brush is stuck in unstable, blocked from testing by Debian #1143751
+RUN printf 'Types: deb\nURIs: http://deb.debian.org/debian\nSuites: unstable\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.pgp\n' > /etc/apt/sources.list.d/unstable.sources \
+ && printf 'Package: *\nPin: release a=unstable\nPin-Priority: 100\n' > /etc/apt/preferences.d/unstable-pin \
+ && apt-get update --yes \
+ && apt-get satisfy --yes --no-install-recommends -t unstable \
+        lintian-brush \
+ && apt-get clean
 
 COPY --from=build /code/target/release/janitor-worker /usr/local/bin/janitor-worker
 
