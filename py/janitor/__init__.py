@@ -41,6 +41,8 @@ def get_debian_schema() -> str:
 
 
 def set_user_agent(user_agent):
+    if user_agent is None:
+        user_agent = f"janitor/{version_string}"
     _mod_http.default_user_agent = lambda: user_agent
     _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
     opener = build_opener()
