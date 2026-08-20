@@ -12,5 +12,66 @@ $ sudo apt install \
 $ make build-all
 ```
 
+## Database
+
+The services share a single PostgreSQL database. Before starting anything,
+load the schema:
+
+```console
+$ createdb janitor
+$ cat schema/state.sql | psql janitor
+$ cat schema/debian/debian.sql | psql janitor  # only if using the Debian-specific features
+```
+
+Without this, every service connects to the database successfully and then
+fails on its first query, since none of the expected tables exist yet.
+
+Workers authenticate against the runner with HTTP Basic Auth, checked against
+the `worker` table (`check_worker_creds()` in `worker_creds.py`). Passwords
+are hashed with pgcrypto:
+
+```console
+$ psql janitor -c "INSERT INTO worker (name, password) VALUES ('myworker', crypt('mypassword', gen_salt('bf')))"
+```
+
+Without this, no worker can ever authenticate to `/assignment`.
+
+## Forge credentials
+
+Publishing merge proposals requires a forge API token (GitHub/GitLab/etc),
+but this is not part of janitor.conf - publish and runner delegate to
+breezy's own credential store instead, at
+`~/.config/breezy/authentication.conf`.
+
+For GitHub, run:
+
+```console
+$ brz github-login
+```
+
+which prompts for a username and token and writes the `[Github]` section
+itself. To do it by hand instead, the section breezy expects is:
+
+```
+[Github]
+scheme = https
+host = github.com
+url = https://api.github.com
+private_token = <your token>
+```
+
+`git_store`'s public port also requires Basic auth for `git-receive-pack`
+(push) - see `is_worker()` in `git_store.py`. Without a matching entry,
+every worker push 401s:
+
+```
+[git_store]
+scheme = http
+host = localhost
+port = 9924
+user = myworker
+password = mypassword
+```
+
 For a Janitor instance, you probably want a custom website in combination with
 the Janitor API. See the existing instances for inspiration.
