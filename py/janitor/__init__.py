@@ -18,7 +18,7 @@
 
 import shlex
 from pathlib import Path
-from urllib.request import URLopener, build_opener, install_opener
+from urllib.request import build_opener, install_opener
 
 from breezy.transport import http as _mod_http
 from breezy.transport.http import urllib as _mod_urllib
@@ -43,7 +43,6 @@ def get_debian_schema() -> str:
 def set_user_agent(user_agent):
     _mod_http.default_user_agent = lambda: user_agent
     _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent
-    URLopener.version = user_agent
     opener = build_opener()
     opener.addheaders = [("User-agent", user_agent)]
     install_opener(opener)
