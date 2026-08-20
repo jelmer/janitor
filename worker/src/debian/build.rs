@@ -92,13 +92,6 @@ pub(crate) fn build(
 
         let result: Result<BuildOnceResult, IterateBuildError> =
             if let Some(suffix) = config.build_suffix.as_ref() {
-                let cloned_tree = breezyshim::tree::WorkingTree::clone(local_tree, subpath, None)
-                    .map_err(|e| BuildFailure {
-                    code: "clone-tree".to_string(),
-                    description: format!("Error cloning tree: {}", e),
-                    stage: vec!["build".to_string()],
-                    details: None,
-                })?;
                 let packaging_context = ognibuild::debian::context::DebianPackagingContext::new(
                     Clone::clone(local_tree),
                     subpath,
