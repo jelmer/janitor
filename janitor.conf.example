@@ -12,6 +12,10 @@ artifact_location: "/home/janitor/artifacts"
 # Database location: must be a valid postgresql URL
 database_location: "postgresql://janitor@example.com:5432/janitor"
 
+# VCS storage locations
+git_location: "http://localhost:9923"
+bzr_location: "http://localhost:9929"
+
 # Redis
 redis_location: "redis://localhost"
 
@@ -39,7 +43,7 @@ distribution {
   lintian_suppress_tag: "source-nmu-has-incorrect-version-number"
   lintian_suppress_tag: "changelog-distribution-does-not-match-changes-file"
   lintian_suppress_tag: "distribution-and-changes-mismatch"
-  build_command: "sbuild -Asv"
+  build_command: "sbuild -Asv --no-clean-source"
   vendor: "debian"
 }
 
@@ -51,7 +55,7 @@ campaign {
     build_distribution: "lintian-fixes"
     build_suffix: "jan+lint"
     base_distribution: "unstable"
-    build_command: "sbuild -Asv"
+    build_command: "sbuild -Asv --no-clean-source"
   }
   bugtracker {
     kind: debian
