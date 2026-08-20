@@ -194,7 +194,7 @@ s3 = [
 [project.scripts]
 janitor-auto-upload = "janitor.debian.auto_upload:main"
 janitor-archive = "janitor.debian.archive:main"
-janitor-bzr-store = "janitor.git_store:main"
+janitor-bzr-store = "janitor.bzr_store:main"
 janitor-differ = "janitor.differ:main"
 janitor-git-store = "janitor.git_store:main"
 #janitor-mail-filter == rust
