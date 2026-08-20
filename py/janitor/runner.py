@@ -1399,7 +1399,7 @@ class QueueProcessor:
     def start_watchdog(self):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._watch_dog = loop.create_task(self._watchdog())
 
         def log_result(future):
@@ -3102,7 +3102,7 @@ async def main_async(argv=None):
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(config.artifact_location)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     if args.debug:
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001

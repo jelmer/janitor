@@ -701,7 +701,7 @@ async def main_async(argv=None):
         logging.basicConfig(level=logging.INFO)
 
     if args.debug:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
         warnings.simplefilter("always", ResourceWarning)
