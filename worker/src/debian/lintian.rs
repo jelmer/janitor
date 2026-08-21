@@ -19,13 +19,13 @@ impl std::fmt::Display for Error {
     }
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug)]
 pub struct LintianInputFile {
-    pub hints: Vec<String>,
+    pub hints: Vec<serde_json::Value>,
     pub path: PathBuf,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug)]
 pub struct LintianGroup {
     pub group_id: String,
     pub input_files: Vec<LintianInputFile>,
@@ -33,7 +33,7 @@ pub struct LintianGroup {
     pub source_version: debversion::Version,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, Default, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, Default, serde::Serialize, Debug)]
 pub struct LintianResult {
     pub groups: Vec<LintianGroup>,
     pub lintian_version: Option<debversion::Version>,
