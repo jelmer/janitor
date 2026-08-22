@@ -1,0 +1,12 @@
+---
+- name: Deploy jelmer/janitor
+  hosts: janitor
+  become: true
+  roles:
+    - base
+    - janitor_source   # clones + builds images; postgres role below needs schema/*.sql from the clone
+    - postgres
+    - redis
+    - caddy
+    - janitor_config
+    - janitor_quadlet
