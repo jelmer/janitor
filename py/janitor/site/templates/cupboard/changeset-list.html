@@ -8,12 +8,17 @@
 {% block body %}
     <div class="section">
         <h1>Changesets</h1>
-        <ul class="simple">
-            {% for changeset in changesets %}
-                <li id="{{ changeset['id'] }}">
-                    <a href="{{ changeset['id'] }}">{{ changeset['id'] }}</a>
-                </li>
-            {% endfor %}
-        </ul>
+        <p><em>Changesets group related runs across multiple codebases together, e.g. for a coordinated migration.</em></p>
+        {% if changesets %}
+            <ul class="simple">
+                {% for changeset in changesets %}
+                    <li id="{{ changeset['id'] }}">
+                        <a href="{{ changeset['id'] }}">{{ changeset['id'] }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No changesets yet.</p>
+        {% endif %}
     </div>
 {% endblock body %}

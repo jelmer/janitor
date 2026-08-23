@@ -12,6 +12,7 @@
 {% block body %}
     <div class="section" id="merge-proposal-status">
         <h1>Merge Proposal Status</h1>
+        <p><em>Status of merge proposals opened for this campaign.</em></p>
         {% macro display_merge_proposal(proposal) %}
             <a class="reference external" href="{{ proposal.url }}">
                 {% if proposal.codebase %}
@@ -23,6 +24,11 @@
             {% if proposal.suite %}(<a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/">Details</a>){% endif %}
             {% if not suite %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
         {% endmacro %}
+        {% if not (open_proposals or merged_proposals or closed_proposals or abandoned_proposals or rejected_proposals) %}
+            <ul class="simple empty-state">
+                <li>No merge proposals yet.</li>
+            </ul>
+        {% endif %}
         {% if open_proposals %}
             <div class="section" id="open-proposals">
                 <h2>Open Proposals</h2>
