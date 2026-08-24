@@ -657,3 +657,104 @@ async def test_assignment_with_only_vcs(aiohttp_client, db, tmp_path):
         "target_repository": {"url": None, "vcs_type": "hg"},
     }
     await qp.stop()
+
+
+async def _register_dummy_active_run(qp, *, campaign="mycampaign", codebase="foo"):
+    # estimate_wait divides queue wait_time by active_run_count; keep the
+    # denominator non-zero so scheduling responses don't 500 in tests
+    await qp.register_run(
+        ActiveRun(
+            campaign=campaign,
+            change_set=None,
+            command="blah",
+            queue_id=999,
+            log_id="dummy-active-run",
+            start_time=datetime.utcnow(),
+            codebase=codebase,
+            vcs_info={},
+            backchannel=Backchannel(),
+            worker_name="tester",
+            instigated_context=None,
+            estimated_duration=timedelta(seconds=10),
+        )
+    )
+
+
+async def test_schedule_response_includes_queue_position(
+    aiohttp_client, db, tmp_path
+):
+    # regression: the frontend showed "position undefined" because
+    # handle_schedule didn't populate queue_position/queue_wait_time
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    await _register_dummy_active_run(qp)
+    client = await create_client(aiohttp_client, qp, campaigns=["mycampaign"])
+    resp = await client.post(
+        "/codebases",
+        json=[{"name": "foo", "branch_url": "https://example.com/foo.git"}],
+    )
+    assert resp.status == 200
+    resp = await client.post(
+        "/candidates",
+        json=[{"campaign": "mycampaign", "codebase": "foo", "command": "true"}],
+    )
+    assert resp.status == 200
+
+    resp = await client.post(
+        "/schedule", json={"campaign": "mycampaign", "codebase": "foo"}
+    )
+    assert resp.status == 200
+    body = await resp.json()
+    assert body["campaign"] == "mycampaign"
+    assert body["codebase"] == "foo"
+    assert "queue_position" in body
+    assert "queue_wait_time" in body
+    assert body["queue_position"] == 1
+    assert body["queue_wait_time"] == 0.0
+    await qp.stop()
+
+
+async def test_schedule_by_run_id_includes_queue_position(
+    aiohttp_client, db, tmp_path
+):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    campaign = "mycampaign"
+    codebase = "foo"
+    await _register_dummy_active_run(qp, campaign=campaign, codebase=codebase)
+    client = await create_client(aiohttp_client, qp, campaigns=[campaign])
+    resp = await client.post(
+        "/codebases",
+        json=[{"name": codebase, "branch_url": "https://example.com/foo.git"}],
+    )
+    assert resp.status == 200
+    resp = await client.post(
+        "/candidates",
+        json=[{"campaign": campaign, "codebase": codebase, "command": "true"}],
+    )
+    assert resp.status == 200
+
+    async with db.acquire() as conn:
+        run_id = await create_dummy_run(conn, campaign=campaign, codebase=codebase)
+
+    resp = await client.post("/schedule", json={"run_id": run_id})
+    assert resp.status == 200
+    body = await resp.json()
+    assert body["campaign"] == campaign
+    assert body["codebase"] == codebase
+    assert "queue_position" in body
+    assert "queue_wait_time" in body
+    await qp.stop()
+
+
+async def test_schedule_unknown_run_id_returns_404(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=["mycampaign"])
+
+    resp = await client.post("/schedule", json={"run_id": "nonexistent"})
+    assert resp.status == 404
+    await qp.stop()
