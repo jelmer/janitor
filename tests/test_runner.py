@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from io import BytesIO
 
 import aiozipkin
+import pytest
 from aiohttp import MultipartWriter
 from fakeredis.aioredis import FakeRedis
 
@@ -30,6 +31,8 @@ from janitor.runner import (
     ActiveRun,
     Backchannel,
     QueueProcessor,
+    WorkerResult,
+    _naive_utc,
     committer_env,
     create_app,
     is_log_filename,
@@ -666,3 +669,64 @@ async def test_assignment_with_only_vcs(aiohttp_client, db, tmp_path):
         "target_repository": {"url": None, "vcs_type": "hg"},
     }
     await qp.stop()
+
+
+def test_naive_utc_from_aware_rfc3339():
+    assert _naive_utc("2026-08-24T12:34:56+00:00") == datetime(2026, 8, 24, 12, 34, 56)
+
+
+def test_naive_utc_converts_offset_to_utc():
+    # +02:00 wall clock 14:30 is 12:30 UTC
+    assert _naive_utc("2026-08-24T14:30:00+02:00") == datetime(2026, 8, 24, 12, 30, 0)
+
+
+def test_naive_utc_passes_through_naive():
+    assert _naive_utc("2026-08-24T12:34:56") == datetime(2026, 8, 24, 12, 34, 56)
+
+
+def test_naive_utc_result_is_naive():
+    # asyncpg rejects aware datetimes for `timestamp without time zone`, so
+    # the returned datetime must have tzinfo stripped regardless of input
+    for value in ("2026-08-24T12:34:56+00:00", "2026-08-24T14:30:00+02:00"):
+        assert _naive_utc(value).tzinfo is None
+
+
+def test_naive_utc_invalid_raises():
+    with pytest.raises(ValueError):
+        _naive_utc("not-a-timestamp")
+
+
+def _minimal_worker_result(**extra):
+    result = {"code": "success", "target": {"name": None}}
+    result.update(extra)
+    return result
+
+
+def test_worker_result_from_json_aware_timestamps():
+    wr = WorkerResult.from_json(
+        _minimal_worker_result(
+            start_time="2026-08-24T14:30:00+02:00",
+            finish_time="2026-08-24T15:00:00+02:00",
+        )
+    )
+    assert wr.start_time == datetime(2026, 8, 24, 12, 30, 0)
+    assert wr.finish_time == datetime(2026, 8, 24, 13, 0, 0)
+    assert wr.start_time.tzinfo is None
+    assert wr.finish_time.tzinfo is None
+
+
+def test_worker_result_from_json_naive_timestamps():
+    wr = WorkerResult.from_json(
+        _minimal_worker_result(
+            start_time="2026-08-24T12:00:00",
+            finish_time="2026-08-24T12:30:00",
+        )
+    )
+    assert wr.start_time == datetime(2026, 8, 24, 12, 0, 0)
+    assert wr.finish_time == datetime(2026, 8, 24, 12, 30, 0)
+
+
+def test_worker_result_from_json_missing_timestamps():
+    wr = WorkerResult.from_json(_minimal_worker_result())
+    assert wr.start_time is None
+    assert wr.finish_time is None
