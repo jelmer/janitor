@@ -15,17 +15,40 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import tempfile
+from pathlib import Path
+
+import asyncpg
+import pytest_asyncio
+import testing.postgresql
 from fakeredis.aioredis import FakeRedis
 
 from janitor.config import read_string as read_config_string
 from janitor.site.simple import create_app
 
+_SCHEMA_DIR = Path(__file__).resolve().parent.parent / "schema"
 
-def create_config():
-    return read_config_string("""
-campaign {
+
+@pytest_asyncio.fixture()
+async def database_location():
+    with testing.postgresql.Postgresql() as postgresql:
+        conn = await asyncpg.connect(postgresql.url())
+        try:
+            await conn.execute((_SCHEMA_DIR / "state.sql").read_text())
+            await conn.execute((_SCHEMA_DIR / "debian" / "debian.sql").read_text())
+        finally:
+            await conn.close()
+
+        yield postgresql.url()
+
+
+def create_config(database_location=None):
+    return read_config_string(f"""
+campaign {{
   name: "lintian-fixes"
-}
+}}
+artifact_location: "{tempfile.mkdtemp()}"
+{f'database_location: "{database_location}"' if database_location else ""}
 """)
 
 
@@ -33,8 +56,10 @@ async def test_create_app():
     await create_app(config=create_config(), redis=FakeRedis())
 
 
-async def test_codebase_query_redirect(aiohttp_client):
-    _private_app, app = await create_app(config=create_config(), redis=FakeRedis())
+async def test_codebase_query_redirect(aiohttp_client, database_location):
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
     client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"codebase": "foo"}, allow_redirects=False
@@ -43,8 +68,12 @@ async def test_codebase_query_redirect(aiohttp_client):
     assert resp.headers["Location"] == "/lintian-fixes/c/foo/"
 
 
-async def test_codebase_query_redirect_legacy_package_param(aiohttp_client):
-    _private_app, app = await create_app(config=create_config(), redis=FakeRedis())
+async def test_codebase_query_redirect_legacy_package_param(
+    aiohttp_client, database_location
+):
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
     client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"package": "foo"}, allow_redirects=False
@@ -53,8 +82,12 @@ async def test_codebase_query_redirect_legacy_package_param(aiohttp_client):
     assert resp.headers["Location"] == "/lintian-fixes/c/foo/"
 
 
-async def test_codebase_query_redirect_prefers_codebase_over_package(aiohttp_client):
-    _private_app, app = await create_app(config=create_config(), redis=FakeRedis())
+async def test_codebase_query_redirect_prefers_codebase_over_package(
+    aiohttp_client, database_location
+):
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
     client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c",
@@ -65,15 +98,23 @@ async def test_codebase_query_redirect_prefers_codebase_over_package(aiohttp_cli
     assert resp.headers["Location"] == "/lintian-fixes/c/new/"
 
 
-async def test_codebase_query_redirect_missing_param_returns_404(aiohttp_client):
-    _private_app, app = await create_app(config=create_config(), redis=FakeRedis())
+async def test_codebase_query_redirect_missing_param_returns_404(
+    aiohttp_client, database_location
+):
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
     client = await aiohttp_client(app)
     resp = await client.get("/lintian-fixes/c", allow_redirects=False)
     assert resp.status == 404
 
 
-async def test_codebase_query_redirect_empty_param_returns_404(aiohttp_client):
-    _private_app, app = await create_app(config=create_config(), redis=FakeRedis())
+async def test_codebase_query_redirect_empty_param_returns_404(
+    aiohttp_client, database_location
+):
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
     client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"codebase": ""}, allow_redirects=False
