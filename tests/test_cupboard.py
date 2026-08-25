@@ -15,13 +15,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiohttp import web
 from jinja2 import Environment
 from yarl import URL
 
 from janitor.config import read_string as read_config_string
+from janitor.runner import store_change_set, store_run
 from janitor.site import (
     classify_result_code,
     format_duration,
@@ -169,3 +170,107 @@ def test_publish():
 def test_run():
     env = Environment(loader=template_loader)
     env.get_template("cupboard/run.html")
+
+
+async def _insert_codebase(conn, name):
+    await conn.execute(
+        "INSERT INTO codebase (name, branch_url, url) VALUES ($1, $2, $2)",
+        name,
+        f"https://example.com/{name}.git",
+    )
+
+
+async def _insert_run(
+    conn, *, run_id, codebase, campaign="mycampaign", start_time, finish_time
+):
+    await store_change_set(conn, run_id, campaign=campaign)
+    await store_run(
+        conn,
+        run_id=run_id,
+        codebase=codebase,
+        campaign=campaign,
+        vcs_type="git",
+        subpath="",
+        start_time=start_time,
+        finish_time=finish_time,
+        command="true",
+        result_code="success",
+        codemod_result={},
+        main_branch_revision=b"revid",
+        revision=b"revid",
+        description=None,
+        context=None,
+        instigated_context=None,
+        logfilenames=[],
+        value=1,
+        change_set=run_id,
+        worker_name=None,
+        branch_url=f"https://example.com/{codebase}.git",
+    )
+
+
+async def test_codebase_redirect_to_latest_run(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    async with db.acquire() as conn:
+        await _insert_codebase(conn, "foo")
+        now = datetime.utcnow()
+        await _insert_run(
+            conn,
+            run_id="older",
+            codebase="foo",
+            start_time=now - timedelta(hours=2),
+            finish_time=now - timedelta(hours=1),
+        )
+        await _insert_run(
+            conn,
+            run_id="newer",
+            codebase="foo",
+            start_time=now - timedelta(minutes=30),
+            finish_time=now,
+        )
+
+    resp = await client.get("/cupboard/c/foo/", allow_redirects=False)
+    assert resp.status == 302
+    assert resp.headers["Location"] == "/cupboard/c/foo/newer/"
+
+
+async def test_codebase_redirect_prefers_finished_run(aiohttp_client, db):
+    # finish_time DESC NULLS LAST: a finished run wins over an in-progress one
+    # (finish_time IS NULL) that started later
+    client = await create_client(aiohttp_client, db)
+    async with db.acquire() as conn:
+        await _insert_codebase(conn, "foo")
+        now = datetime.utcnow()
+        await _insert_run(
+            conn,
+            run_id="done",
+            codebase="foo",
+            start_time=now - timedelta(hours=1),
+            finish_time=now - timedelta(minutes=30),
+        )
+        await _insert_run(
+            conn,
+            run_id="running",
+            codebase="foo",
+            start_time=now,
+            finish_time=None,
+        )
+
+    resp = await client.get("/cupboard/c/foo/", allow_redirects=False)
+    assert resp.status == 302
+    assert resp.headers["Location"] == "/cupboard/c/foo/done/"
+
+
+async def test_codebase_redirect_no_runs_returns_404(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    async with db.acquire() as conn:
+        await _insert_codebase(conn, "foo")
+
+    resp = await client.get("/cupboard/c/foo/", allow_redirects=False)
+    assert resp.status == 404
+
+
+async def test_codebase_redirect_unknown_codebase_returns_404(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    resp = await client.get("/cupboard/c/nonexistent/", allow_redirects=False)
+    assert resp.status == 404
