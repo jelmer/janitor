@@ -298,7 +298,7 @@ WHERE followup.origin = $1""",
     if primary_log == "dist":
         logf = await get_log(DIST_LOG_FILENAME)
         line_count, include_lines, highlight_lines = find_dist_log_failure(
-            logf, FAIL_BUILD_LOG_LEN
+            logf.read(), FAIL_BUILD_LOG_LEN
         )
         kwargs["dist_log_line_count"] = line_count
         kwargs["dist_log_include_lines"] = include_lines
@@ -313,7 +313,7 @@ WHERE followup.origin = $1""",
 
         logf = await get_log(BUILD_LOG_FILENAME)
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            logf, FAIL_BUILD_LOG_LEN
+            logf.read(), FAIL_BUILD_LOG_LEN
         )
         kwargs["build_log_line_count"] = line_count
         kwargs["build_log_include_lines"] = include_lines
