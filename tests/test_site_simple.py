@@ -32,7 +32,8 @@ async def test_create_app():
 
 
 async def test_codebase_query_redirect(aiohttp_client):
-    client = await aiohttp_client(await create_app(config=create_config()))
+    _private_app, app = await create_app(config=create_config())
+    client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"codebase": "foo"}, allow_redirects=False
     )
@@ -41,7 +42,8 @@ async def test_codebase_query_redirect(aiohttp_client):
 
 
 async def test_codebase_query_redirect_legacy_package_param(aiohttp_client):
-    client = await aiohttp_client(await create_app(config=create_config()))
+    _private_app, app = await create_app(config=create_config())
+    client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"package": "foo"}, allow_redirects=False
     )
@@ -50,7 +52,8 @@ async def test_codebase_query_redirect_legacy_package_param(aiohttp_client):
 
 
 async def test_codebase_query_redirect_prefers_codebase_over_package(aiohttp_client):
-    client = await aiohttp_client(await create_app(config=create_config()))
+    _private_app, app = await create_app(config=create_config())
+    client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c",
         params={"codebase": "new", "package": "old"},
@@ -61,13 +64,15 @@ async def test_codebase_query_redirect_prefers_codebase_over_package(aiohttp_cli
 
 
 async def test_codebase_query_redirect_missing_param_returns_404(aiohttp_client):
-    client = await aiohttp_client(await create_app(config=create_config()))
+    _private_app, app = await create_app(config=create_config())
+    client = await aiohttp_client(app)
     resp = await client.get("/lintian-fixes/c", allow_redirects=False)
     assert resp.status == 404
 
 
 async def test_codebase_query_redirect_empty_param_returns_404(aiohttp_client):
-    client = await aiohttp_client(await create_app(config=create_config()))
+    _private_app, app = await create_app(config=create_config())
+    client = await aiohttp_client(app)
     resp = await client.get(
         "/lintian-fixes/c", params={"codebase": ""}, allow_redirects=False
     )
