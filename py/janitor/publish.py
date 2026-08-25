@@ -3572,7 +3572,7 @@ async def main_async(argv=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     if args.debug:
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001
