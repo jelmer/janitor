@@ -33,6 +33,8 @@ from janitor.runner import (
     Backchannel,
     QueueItemAlreadyClaimed,
     QueueProcessor,
+    WorkerResult,
+    _naive_utc,
     committer_env,
     create_app,
     is_log_filename,
@@ -715,3 +717,161 @@ async def test_register_run_concurrent_claims_pick_exactly_one():
     winner = await qp.redis.hget("assigned-queue-items", "42")
     assert winner in (b"a", b"b")
     assert await qp.redis.hkeys("active-runs") == [winner]
+    
+    
+def test_naive_utc_from_aware_rfc3339():
+    assert _naive_utc("2026-08-24T12:34:56+00:00") == datetime(2026, 8, 24, 12, 34, 56)
+
+
+def test_naive_utc_converts_offset_to_utc():
+    # +02:00 wall clock 14:30 is 12:30 UTC
+    assert _naive_utc("2026-08-24T14:30:00+02:00") == datetime(2026, 8, 24, 12, 30, 0)
+
+
+def test_naive_utc_passes_through_naive():
+    assert _naive_utc("2026-08-24T12:34:56") == datetime(2026, 8, 24, 12, 34, 56)
+
+
+def test_naive_utc_result_is_naive():
+    # asyncpg rejects aware datetimes for `timestamp without time zone`, so
+    # the returned datetime must have tzinfo stripped regardless of input
+    for value in ("2026-08-24T12:34:56+00:00", "2026-08-24T14:30:00+02:00"):
+        assert _naive_utc(value).tzinfo is None
+
+
+def test_naive_utc_invalid_raises():
+    with pytest.raises(ValueError):
+        _naive_utc("not-a-timestamp")
+
+
+def _minimal_worker_result(**extra):
+    result = {"code": "success", "target": {"name": None}}
+    result.update(extra)
+    return result
+
+
+def test_worker_result_from_json_aware_timestamps():
+    wr = WorkerResult.from_json(
+        _minimal_worker_result(
+            start_time="2026-08-24T14:30:00+02:00",
+            finish_time="2026-08-24T15:00:00+02:00",
+        )
+    )
+    assert wr.start_time == datetime(2026, 8, 24, 12, 30, 0)
+    assert wr.finish_time == datetime(2026, 8, 24, 13, 0, 0)
+    assert wr.start_time.tzinfo is None
+    assert wr.finish_time.tzinfo is None
+
+
+def test_worker_result_from_json_naive_timestamps():
+    wr = WorkerResult.from_json(
+        _minimal_worker_result(
+            start_time="2026-08-24T12:00:00",
+            finish_time="2026-08-24T12:30:00",
+        )
+    )
+    assert wr.start_time == datetime(2026, 8, 24, 12, 0, 0)
+    assert wr.finish_time == datetime(2026, 8, 24, 12, 30, 0)
+
+
+def test_worker_result_from_json_missing_timestamps():
+    wr = WorkerResult.from_json(_minimal_worker_result())
+    assert wr.start_time is None
+    assert wr.finish_time is None
+
+
+async def _register_dummy_active_run(qp, *, campaign="mycampaign", codebase="foo"):
+    # estimate_wait divides queue wait_time by active_run_count; keep the
+    # denominator non-zero so scheduling responses don't 500 in tests
+    await qp.register_run(
+        ActiveRun(
+            campaign=campaign,
+            change_set=None,
+            command="blah",
+            queue_id=999,
+            log_id="dummy-active-run",
+            start_time=datetime.utcnow(),
+            codebase=codebase,
+            vcs_info={},
+            backchannel=Backchannel(),
+            worker_name="tester",
+            instigated_context=None,
+            estimated_duration=timedelta(seconds=10),
+        )
+    )
+
+
+async def test_schedule_response_includes_queue_position(aiohttp_client, db, tmp_path):
+    # regression: the frontend showed "position undefined" because
+    # handle_schedule didn't populate queue_position/queue_wait_time
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    await _register_dummy_active_run(qp)
+    client = await create_client(aiohttp_client, qp, campaigns=["mycampaign"])
+    resp = await client.post(
+        "/codebases",
+        json=[{"name": "foo", "branch_url": "https://example.com/foo.git"}],
+    )
+    assert resp.status == 200
+    resp = await client.post(
+        "/candidates",
+        json=[{"campaign": "mycampaign", "codebase": "foo", "command": "true"}],
+    )
+    assert resp.status == 200
+
+    resp = await client.post(
+        "/schedule", json={"campaign": "mycampaign", "codebase": "foo"}
+    )
+    assert resp.status == 200
+    body = await resp.json()
+    assert body["campaign"] == "mycampaign"
+    assert body["codebase"] == "foo"
+    assert "queue_position" in body
+    assert "queue_wait_time" in body
+    assert body["queue_position"] == 1
+    assert body["queue_wait_time"] == 0.0
+    await qp.stop()
+
+
+async def test_schedule_by_run_id_includes_queue_position(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    campaign = "mycampaign"
+    codebase = "foo"
+    await _register_dummy_active_run(qp, campaign=campaign, codebase=codebase)
+    client = await create_client(aiohttp_client, qp, campaigns=[campaign])
+    resp = await client.post(
+        "/codebases",
+        json=[{"name": codebase, "branch_url": "https://example.com/foo.git"}],
+    )
+    assert resp.status == 200
+    resp = await client.post(
+        "/candidates",
+        json=[{"campaign": campaign, "codebase": codebase, "command": "true"}],
+    )
+    assert resp.status == 200
+
+    async with db.acquire() as conn:
+        run_id = await create_dummy_run(conn, campaign=campaign, codebase=codebase)
+
+    resp = await client.post("/schedule", json={"run_id": run_id})
+    assert resp.status == 200
+    body = await resp.json()
+    assert body["campaign"] == campaign
+    assert body["codebase"] == codebase
+    assert "queue_position" in body
+    assert "queue_wait_time" in body
+    await qp.stop()
+
+
+async def test_schedule_unknown_run_id_returns_404(aiohttp_client, db, tmp_path):
+    vcs = tmp_path / "vcs"
+    vcs.mkdir()
+    qp = await create_queue_processor(db, vcs_managers=get_vcs_managers(str(vcs)))
+    client = await create_client(aiohttp_client, qp, campaigns=["mycampaign"])
+
+    resp = await client.post("/schedule", json={"run_id": "nonexistent"})
+    assert resp.status == 404
+    await qp.stop()

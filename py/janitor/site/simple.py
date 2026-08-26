@@ -58,7 +58,7 @@ private_routes = web.RouteTableDef()
 
 
 def create_background_task(fn, title):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     task = loop.create_task(fn)
 
     def log_result(future):

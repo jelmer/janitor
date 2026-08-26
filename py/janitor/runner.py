@@ -32,7 +32,7 @@ import warnings
 from collections.abc import Iterator
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from typing import Any, Optional, TypedDict, cast
 
@@ -603,6 +603,15 @@ class JanitorResult:
         }
 
 
+def _naive_utc(value: str) -> datetime:
+    # worker sends aware RFC3339, the run table columns are naive - asyncpg
+    # can't mix the two, so normalize to naive UTC like datetime.utcnow() elsewhere
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 @dataclass
 class WorkerResult:
     """The result from a worker."""
@@ -691,10 +700,10 @@ class WorkerResult:
             details=worker_result.get("details"),
             stage=worker_result.get("stage"),
             builder_result=builder_result,
-            start_time=datetime.fromisoformat(worker_result["start_time"])
+            start_time=_naive_utc(worker_result["start_time"])
             if "start_time" in worker_result
             else None,
-            finish_time=datetime.fromisoformat(worker_result["finish_time"])
+            finish_time=_naive_utc(worker_result["finish_time"])
             if "finish_time" in worker_result
             else None,
             queue_id=(
@@ -1399,7 +1408,7 @@ class QueueProcessor:
     def start_watchdog(self):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._watch_dog = loop.create_task(self._watchdog())
 
         def log_result(future):
@@ -1878,6 +1887,10 @@ async def handle_schedule(request):
         except CandidateUnavailable as e:
             raise web.HTTPBadRequest(text="Candidate not available") from e
 
+    queue_position, queue_wait_time, _cum_wait_time = await request.app[
+        "queue_processor"
+    ].estimate_wait(codebase, campaign)
+
     response_obj = {
         "campaign": campaign,
         "offset": offset,
@@ -1886,6 +1899,10 @@ async def handle_schedule(request):
         "queue_id": queue_id,
         "estimated_duration_seconds": estimated_duration.total_seconds()
         if estimated_duration
+        else None,
+        "queue_position": queue_position,
+        "queue_wait_time": queue_wait_time.total_seconds()
+        if queue_wait_time is not None
         else None,
     }
     return web.json_response(response_obj)
@@ -3105,7 +3122,7 @@ async def main_async(argv=None):
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(config.artifact_location)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     if args.debug:
         loop.set_debug(True)
         loop.slow_callback_duration = 0.001

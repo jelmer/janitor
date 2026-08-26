@@ -1029,7 +1029,7 @@ async def main_async(argv=None):
         gpg_context,
     )
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     tasks = [
         loop.create_task(
             run_web_server(

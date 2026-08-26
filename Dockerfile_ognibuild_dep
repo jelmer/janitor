@@ -23,6 +23,8 @@ MAINTAINER Jelmer Vernooij <jelmer@jelmer.uk>
 
 ARG DEBIAN_FRONTEND=noninteractive
 
+COPY Cargo.toml /tmp/janitor-cargo.toml
+
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
         auto-apt-proxy \
@@ -40,8 +42,10 @@ RUN apt-get update --yes \
         pkg-config \
         python3-minimal \
  && apt-get clean \
+ && OGNIBUILD_VERSION=$(grep -oP '^ognibuild = \{ version = "\K[^"]+' /tmp/janitor-cargo.toml) \
  && git clone https://github.com/jelmer/ognibuild.git /code/ \
  && cd /code/ \
+ && git checkout v$OGNIBUILD_VERSION \
  && cargo build --verbose --release --features debian --bin dep-server
 
 
