@@ -24,6 +24,8 @@ RUN apt-get update --yes \
        ## Extra packages
         libjs-chart.js \
         libjs-jquery-datatables \
+        libjs-jquery-typeahead \
+        libjs-moment \
         python3-gpg \
         python3-pip \
  && apt-get clean
