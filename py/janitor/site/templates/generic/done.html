@@ -24,6 +24,9 @@
             <input type="submit" value="Refresh" />
         </form>
         {% set ns = namespace(last_date=None, run_date=None) %}
+        {% if not runs %}
+            <p>No changes have been merged or pushed yet.</p>
+        {% else %}
         <ul>
             {% for run in runs %}
                 {% if run.absorbed_at %}
@@ -56,5 +59,6 @@
                 </li>
             {% endfor %}
         </ul>
+        {% endif %}
     </div>
 {% endblock body %}

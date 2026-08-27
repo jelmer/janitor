@@ -13,15 +13,19 @@
 {% block body %}
     <div class="section" id="history">
         <h1>Ready to publish</h1>
-        <ul>
-            {% for run in runs %}
-                <li>
-                    <a href="/cupboard/c/{{ run.codebase }}/">{{ run.codebase }}</a>
-                    {% set command = run.command -%}
-                    {% set result = run.result -%}
-                    {% include [run.suite + "/summary.html", "generic/summary.html"] %}
-                </li>
-            {% endfor %}
-        </ul>
+        {% if runs %}
+            <ul>
+                {% for run in runs %}
+                    <li>
+                        <a href="/cupboard/c/{{ run.codebase }}/">{{ run.codebase }}</a>
+                        {% set command = run.command -%}
+                        {% set result = run.result -%}
+                        {% include [run.suite + "/summary.html", "generic/summary.html"] %}
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>Nothing is ready to publish right now.</p>
+        {% endif %}
     </div>
 {% endblock body %}
