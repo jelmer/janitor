@@ -914,6 +914,7 @@ pub enum SingleItemError {
     AssignmentFailure(String),
     EmptyQueue,
     ResultUploadFailure(String),
+    JobPanicked(String),
 }
 
 impl From<client::AssignmentError> for SingleItemError {
@@ -1081,7 +1082,7 @@ pub async fn process_single_item(
         metadata
     })
     .await
-    .unwrap();
+    .map_err(|e| SingleItemError::JobPanicked(e.to_string()))?;
 
     let result = client
         .upload_results(&assignment.id, &metadata, Some(output_directory.path()))
