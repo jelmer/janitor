@@ -101,8 +101,12 @@ def update_vars_from_request(vs, request):
     else:
         vs["url"] = request.url
         vcs_base_url = request.url.with_path("/")
-    vs["git_vcs_manager"] = RemoteGitVcsManager(str(vcs_base_url / "git"))
-    vs["bzr_vcs_manager"] = RemoteBzrVcsManager(str(vcs_base_url / "bzr"))
+    # RemoteGitVcsManager.get_repository_url() does a raw Url::join(codebase)
+    # on this base - without a trailing slash, join() replaces the last path
+    # segment ("git") instead of appending to it, silently dropping it from
+    # every URL this manager builds.
+    vs["git_vcs_manager"] = RemoteGitVcsManager(str(vcs_base_url / "git") + "/")
+    vs["bzr_vcs_manager"] = RemoteBzrVcsManager(str(vcs_base_url / "bzr") + "/")
     vs["config"] = request.app["config"]
 
 

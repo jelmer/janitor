@@ -1,13 +1,13 @@
-{% macro local_command(command, codebase, vcs, vcs_url) %}
+{% macro local_command(command, codebase, vcs, suite) %}
     {% if failure_stage and (failure_stage == 'validate' or (command and failure_stage.startswith('codemod/'))) %}
         <p>Try this locally:</p>
         <div class="highlight-default notranslate">
             <div class="highlight">
                 <pre>
 {% if vcs == 'git' %}
-git clone {{ vcs_url }} {{ codebase }}
+git clone {{ git_vcs_manager.get_repository_url(codebase) }} {{ codebase }}
 {% elif vcs == 'bzr' %}
-bzr branch {{ vcs_url }} {{ codebase }}
+bzr branch {{ bzr_vcs_manager.get_branch_url(codebase, suite) }} {{ codebase }}
 {% else %}
 unsupported vcs {{ vcs }}
 {% endif %}
