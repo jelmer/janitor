@@ -39,6 +39,9 @@
             {% endfor %}
             ]
         {%- endmacro -%}
+        {% if failure_stages | sum(attribute=1) == 0 %}
+            <p>No failures recorded yet.</p>
+        {% else %}
         <div style="width: 400px; height: 600px;">
             <canvas id="stage-chart" />
         </div>
@@ -96,5 +99,6 @@
                 });
             });
         </script>
+        {% endif %}
     </div>
 {% endblock body %}
