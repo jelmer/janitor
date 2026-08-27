@@ -30,10 +30,12 @@
                 <div class="documentwrapper">
                     <div class="bodywrapper">
                     {% endif %}
-                    <main>
-                        {% block body %}
-                        {% endblock body %}
-                    </main>
+                    <div class="body">
+                        <main>
+                            {% block body %}
+                            {% endblock body %}
+                        </main>
+                    </div>
                     {% if layout != 'plain' %}
                     </div>
                 </div>
