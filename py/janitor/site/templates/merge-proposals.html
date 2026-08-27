@@ -25,7 +25,9 @@
             {% if not suite %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
         {% endmacro %}
         {% if not (open_proposals or merged_proposals or closed_proposals or abandoned_proposals or rejected_proposals) %}
-            <p>No merge proposals yet.</p>
+            <ul class="simple empty-state">
+                <li>No merge proposals yet.</li>
+            </ul>
         {% endif %}
         {% if open_proposals %}
             <div class="section" id="open-proposals">
