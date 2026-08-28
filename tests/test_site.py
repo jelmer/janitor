@@ -16,8 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
-from janitor.site import format_duration, format_timestamp
+from yarl import URL
+
+from janitor.site import format_duration, format_timestamp, update_vars_from_request
 
 
 def test_duration():
@@ -30,3 +33,50 @@ def test_duration():
 
 def test_timestamp():
     assert "2022-10-01T11:10" == format_timestamp(datetime(2022, 10, 1, 11, 10, 22))
+
+
+def _make_request(external_url=None, request_url="https://example.com/some/path"):
+    app = MagicMock()
+    app.__getitem__.side_effect = {
+        "external_url": external_url,
+        "config": MagicMock(campaign=[]),
+    }.__getitem__
+    app.__contains__.side_effect = lambda k: k in {"config", "external_url"}
+    request = MagicMock()
+    request.__getitem__.side_effect = {"user": None}.__getitem__
+    request.rel_url = URL(request_url).relative()
+    request.url = URL(request_url)
+    request.app = app
+    return request
+
+
+def test_update_vars_from_request_manager_urls_include_vcs_prefix():
+    # Regression test for #1253: the VCS manager base URLs supplied to the
+    # template context must produce repository URLs that keep the "/git/" and
+    # "/bzr/" path prefix, not drop them via Url::join replacing the last
+    # segment.
+    vs: dict = {}
+    update_vars_from_request(vs, _make_request())
+    assert (
+        vs["git_vcs_manager"].get_repository_url("mycb")
+        == "https://example.com/git/mycb"
+    )
+    assert (
+        vs["bzr_vcs_manager"].get_repository_url("mycb")
+        == "https://example.com/bzr/mycb"
+    )
+
+
+def test_update_vars_from_request_uses_external_url():
+    vs: dict = {}
+    update_vars_from_request(
+        vs, _make_request(external_url=URL("https://public.example.org/"))
+    )
+    assert (
+        vs["git_vcs_manager"].get_repository_url("mycb")
+        == "https://public.example.org/git/mycb"
+    )
+    assert (
+        vs["bzr_vcs_manager"].get_repository_url("mycb")
+        == "https://public.example.org/bzr/mycb"
+    )

@@ -18,6 +18,7 @@
 from jinja2 import Environment, select_autoescape
 
 from janitor.site import template_loader
+from janitor.vcs import RemoteBzrVcsManager, RemoteGitVcsManager
 
 env = Environment(loader=template_loader, autoescape=select_autoescape(["html", "xml"]))
 
@@ -50,6 +51,36 @@ def test_display_branch_url():
         <a href="https://github.com/jelmer/example.git">https://github.com/jelmer/example</a>
     
 """
+    )
+
+
+def _render_local_command(vcs, **context):
+    src = (
+        '{% from "run_util.html" import local_command with context %}'
+        '{{ local_command("brz cmd", "mycodebase", vcs, "unstable") }}'
+    )
+    return env.from_string(src).render(vcs=vcs, failure_stage="validate", **context)
+
+
+def test_local_command_git_url():
+    # Regression test for #1253: local_command must render a git-clone URL
+    # that includes the "/git/" path prefix from the base VCS URL.
+    rendered = _render_local_command(
+        "git",
+        git_vcs_manager=RemoteGitVcsManager("https://example.com/git/"),
+    )
+    assert "git clone https://example.com/git/mycodebase mycodebase" in rendered
+
+
+def test_local_command_bzr_url():
+    # Regression test for #1253: local_command must render a bzr-branch URL
+    # that includes the "/bzr/" path prefix from the base VCS URL.
+    rendered = _render_local_command(
+        "bzr",
+        bzr_vcs_manager=RemoteBzrVcsManager("https://example.com/bzr/"),
+    )
+    assert (
+        "bzr branch https://example.com/bzr/mycodebase/unstable mycodebase" in rendered
     )
 
 
