@@ -1016,6 +1016,10 @@ class JenkinsBackchannel(Backchannel):
         }
 
 
+class NoActiveRun(Exception):
+    """The worker has no active run to kill (e.g. it restarted)."""
+
+
 class PollingBackchannel(Backchannel):
     KEEPALIVE_TIMEOUT = 60
 
@@ -1037,10 +1041,16 @@ class PollingBackchannel(Backchannel):
             session.post(
                 self.my_url / "kill",
                 headers={"Accept": "application/json"},
-                raise_for_status=True,
-            ),
+            ) as resp,
         ):
-            pass
+            if resp.status == 501:
+                raise NotImplementedError(await resp.text())
+            if resp.status == 410:
+                raise NoActiveRun(
+                    "worker has no active run - it may have restarted "
+                    "while this run was in progress"
+                )
+            resp.raise_for_status()
 
     async def list_log_files(self):
         # TODO(jelmer)
@@ -1940,8 +1950,10 @@ async def handle_kill(request):
         await active_run.backchannel.kill()
     except NotImplementedError as e:
         raise web.HTTPNotImplemented(
-            text="kill not supported for this type of run"
+            text=str(e) or "kill not supported for this type of run"
         ) from e
+    except NoActiveRun as e:
+        raise web.HTTPGone(text=str(e)) from e
     else:
         return web.json_response(ret)
 

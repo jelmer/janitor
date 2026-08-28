@@ -22,7 +22,7 @@ from io import BytesIO
 
 import aiozipkin
 import pytest
-from aiohttp import MultipartWriter
+from aiohttp import MultipartWriter, web
 from fakeredis.aioredis import FakeRedis
 
 from janitor.config import read_string as read_config_string
@@ -31,6 +31,7 @@ from janitor.logs import LogFileManager
 from janitor.runner import (
     ActiveRun,
     Backchannel,
+    PollingBackchannel,
     QueueItemAlreadyClaimed,
     QueueProcessor,
     WorkerResult,
@@ -780,7 +781,9 @@ def test_worker_result_from_json_missing_timestamps():
     assert wr.finish_time is None
 
 
-async def _register_dummy_active_run(qp, *, campaign="mycampaign", codebase="foo"):
+async def _register_dummy_active_run(
+    qp, *, campaign="mycampaign", codebase="foo", backchannel=None
+):
     # estimate_wait divides queue wait_time by active_run_count; keep the
     # denominator non-zero so scheduling responses don't 500 in tests
     await qp.register_run(
@@ -793,12 +796,56 @@ async def _register_dummy_active_run(qp, *, campaign="mycampaign", codebase="foo
             start_time=datetime.utcnow(),
             codebase=codebase,
             vcs_info={},
-            backchannel=Backchannel(),
+            backchannel=backchannel or Backchannel(),
             worker_name="tester",
             instigated_context=None,
             estimated_duration=timedelta(seconds=10),
         )
     )
+
+
+async def test_kill_no_active_run(aiohttp_client):
+    # regression: if the worker restarted mid-run, killing it used to
+    # raise a bare NotImplementedError instead of a clear message
+    qp = await create_queue_processor()
+
+    worker_app = web.Application()
+    worker_app.router.add_post(
+        "/kill", lambda request: web.Response(status=410, text="no run in progress")
+    )
+    worker_client = await aiohttp_client(worker_app)
+
+    await _register_dummy_active_run(
+        qp, backchannel=PollingBackchannel(my_url=worker_client.make_url("/"))
+    )
+    client = await create_client(aiohttp_client, qp)
+
+    resp = await client.post("/kill/dummy-active-run")
+    assert resp.status == 410
+    assert await resp.text() == (
+        "worker has no active run - it may have restarted "
+        "while this run was in progress"
+    )
+
+
+async def test_kill_not_supported(aiohttp_client):
+    qp = await create_queue_processor()
+
+    worker_app = web.Application()
+    worker_app.router.add_post(
+        "/kill",
+        lambda request: web.Response(status=501, text="kill is not yet supported"),
+    )
+    worker_client = await aiohttp_client(worker_app)
+
+    await _register_dummy_active_run(
+        qp, backchannel=PollingBackchannel(my_url=worker_client.make_url("/"))
+    )
+    client = await create_client(aiohttp_client, qp)
+
+    resp = await client.post("/kill/dummy-active-run")
+    assert resp.status == 501
+    assert await resp.text() == "kill is not yet supported"
 
 
 async def test_schedule_response_includes_queue_position(aiohttp_client, db, tmp_path):

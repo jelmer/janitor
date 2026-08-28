@@ -3,7 +3,7 @@ use askama::Template;
 use axum::response::IntoResponse;
 use axum::{
     extract::Path, extract::State, http::HeaderMap, http::StatusCode, response::Json,
-    response::Response, routing::get, Router,
+    response::Response, routing::get, routing::post, Router,
 };
 use janitor::api::worker::{Assignment, Metadata};
 use std::sync::{Arc, RwLock};
@@ -60,6 +60,21 @@ async fn index(State(state): State<Arc<RwLock<AppState>>>) -> Response {
         Ok(html) => axum::response::Html(html).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
+}
+
+async fn kill(State(state): State<Arc<RwLock<AppState>>>) -> Response {
+    // There is no cancellation handle threaded through run_worker's actual
+    // command execution yet, so an in-progress build cannot be forcibly
+    // stopped from here. Reporting this honestly (501) rather than 404ing
+    // lets the runner's existing "kill not supported" handling deal with
+    // it cleanly instead of crashing on an unexpected response.
+    if state.read().unwrap().assignment.is_none() {
+        // The run existed but is gone now (e.g. this worker restarted
+        // since the run was assigned) - GONE fits that better than
+        // NOT_FOUND.
+        return (StatusCode::GONE, "no run in progress").into_response();
+    }
+    (StatusCode::NOT_IMPLEMENTED, "kill is not yet supported").into_response()
 }
 
 async fn health() -> String {
@@ -268,6 +283,7 @@ pub fn app(state: Arc<RwLock<AppState>>) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/health", get(health))
+        .route("/kill", post(kill))
         .route("/assignment", get(assignment))
         .route("/logs", get(get_logs))
         .route("/logs/{filename}", get(get_log_file))
@@ -363,6 +379,70 @@ mod tests {
         let body: Assignment = serde_json::from_str(&get_body(response).await).unwrap();
         assert_eq!(body.id, "test");
         assert_eq!(body.queue_id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_kill_no_assignment() {
+        let app = app(Arc::new(RwLock::new(AppState::default())));
+        let request = Request::builder()
+            .method(axum::http::Method::POST)
+            .uri("/kill")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 410);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "no run in progress");
+    }
+
+    #[tokio::test]
+    async fn test_kill_with_assignment() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        if let Ok(mut state) = state.write() {
+            state.assignment = Some(Assignment {
+                id: "test".to_string(),
+                queue_id: 1,
+                campaign: "lintian-fixes".to_string(),
+                codebase: "foo".to_string(),
+                force_build: true,
+                branch: janitor::api::worker::Branch {
+                    cached_url: None,
+                    vcs_type: janitor::vcs::VcsType::Git,
+                    url: Some("https://example.com/vcs".parse().unwrap()),
+                    subpath: std::path::PathBuf::from(""),
+                    additional_colocated_branches: Some(vec![]),
+                    default_empty: false,
+                },
+                resume: None,
+                target_repository: janitor::api::worker::TargetRepository {
+                    url: "https://example.com/".parse().unwrap(),
+                },
+                skip_setup_validation: false,
+                codemod: janitor::api::worker::Codemod {
+                    command: "echo".to_string(),
+                    environment: std::collections::HashMap::new(),
+                },
+                env: std::collections::HashMap::new(),
+                build: janitor::api::worker::Build {
+                    config: serde_json::Value::Null,
+                    environment: None,
+                    target: "test".to_string(),
+                },
+            });
+        };
+
+        let app = super::app(state.clone());
+        let request = Request::builder()
+            .method(axum::http::Method::POST)
+            .uri("/kill")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), 501);
+
+        let body = get_body(response).await;
+        assert_eq!(body, "kill is not yet supported");
     }
 
     #[tokio::test]
