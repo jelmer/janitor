@@ -717,8 +717,8 @@ async def test_register_run_concurrent_claims_pick_exactly_one():
     winner = await qp.redis.hget("assigned-queue-items", "42")
     assert winner in (b"a", b"b")
     assert await qp.redis.hkeys("active-runs") == [winner]
-    
-    
+
+
 def test_naive_utc_from_aware_rfc3339():
     assert _naive_utc("2026-08-24T12:34:56+00:00") == datetime(2026, 8, 24, 12, 34, 56)
 
