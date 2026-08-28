@@ -1,3 +1,4 @@
+{% set layout = "plain" %}
 {% extends "layout.html" %}
 {% block page_title %}
     About
@@ -9,27 +10,36 @@
             The initial version of the Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.
         </p>
         <p>
-            The code for the Debian-specific instance has now been split out into a <a href="https://salsa.debian.org/janitor-team/janitor.debian.net/">separate
+            The code for the <a href="https://janitor.debian.net/">Debian-specific instance</a> has now been split out into a <a href="https://salsa.debian.org/janitor-team/janitor.debian.net/">separate
             repository</a>.
         </p>
-        <p>Many thanks to everybody who has provided feedback and helped make the Janitor better.</p>
+        <p>Many thanks to <a href="https://github.com/jelmer/janitor/blob/main/AUTHORS">everybody</a> who has provided feedback and helped make the Janitor better.</p>
         <h2>Source Code</h2>
-        <p>The Janitor itself is mostly written in Python, using the following libraries and services:</p>
+        <p>The Janitor itself is written in a mix of Python and Rust, using the following libraries and services:</p>
         <ul>
             <li>
-                The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for sphinx.
+                The style for the website is based on <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.8</a> theme for <a href="https://www.sphinx-doc.org/">sphinx</a>.
             </li>
             <li>
                 <a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
-                provides abstractions over the version control system (Git, Bazaar,
-                Mercurial, Subversion) and the supported hosting platforms (GitHub,
-                GitLab, Launchpad).
+                provides abstractions over the version control system (<a href="https://git-scm.com/">Git</a>,
+                <a href="https://en.wikipedia.org/wiki/GNU_Bazaar">Bazaar</a>,
+                <a href="https://www.mercurial-scm.org/">Mercurial</a> &amp; <a href="https://subversion.apache.org/">Subversion</a>) and the supported hosting platforms (<a href="https://github.com/">GitHub</a>,
+                <a href="https://gitlab.com/">GitLab</a> &amp; <a href="https://launchpad.net/">Launchpad</a>).
             </li>
             <li>
                 <a class="reference external"
                    href="https://github.com/jelmer/silver-platter/">Silver-Platter</a>
                 ties this all together; it manages branches, invokes codemods and pushes back or creates
                 merge proposals.
+            </li>
+            <li>
+                <a class="reference external" href="https://salsa.debian.org/jelmer/debian-codemods/">lintian-brush</a>
+                applies the actual fixes for the <code>lintian-fixes</code> campaign.
+            </li>
+            <li>
+                <a class="reference external" href="https://github.com/jelmer/ognibuild">ognibuild</a>
+                detects and installs a codebase's build dependencies.
             </li>
         </ul>
         <p>
