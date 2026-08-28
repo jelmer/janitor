@@ -8,11 +8,75 @@
 {% block body %}
     <div class="section" id="workers">
         <h1>Workers</h1>
-        {% for worker in workers %}
-            <div class="subsection">
-                <h2>{{ worker.name }}</h2>
-                <p>Total runs: {{ worker.run_count }}</p>
+        <p><em>Workers currently registered with this Janitor instance.</em></p>
+        {%- macro random_colors(n) -%}
+            [
+            {% for i in range(n) %}
+                'rgb({{ range(0, 255) |random }}, {{ range(0, 255) |random }}, {{ range(0, 255) |random }})',
+            {% endfor %}
+            ]
+        {%- endmacro -%}
+        {% if workers %}
+            <div style="width: 400px; height: 400px;">
+                <canvas id="workers-chart"></canvas>
             </div>
-        {% endfor %}
+            <script>
+                new Chart($("#workers-chart"), {
+                    type: 'pie',
+                    data: {
+                        labels: {{ workers | map(attribute = "name") | list | tojson }},
+                        datasets: [{
+                            data: {{ workers | map(attribute = "run_count") | list | tojson }},
+                            backgroundColor: {{ random_colors(workers | length) }},
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                text: "Runs per worker",
+                                display: true
+                            },
+                        },
+                    },
+                });
+            </script>
+            {% set any_links = workers | selectattr("link") | list %}
+            <table id="workers-table" class="display docutils" border="1">
+                <thead valign="bottom">
+                    <tr>
+                        <th class="head">Name</th>
+                        <th class="head">Total runs</th>
+                        {% if any_links %}<th class="head">Link</th>{% endif %}
+                    </tr>
+                </thead>
+                <tbody valign="top">
+                    {% for worker in workers %}
+                        <tr>
+                            <td>{{ worker.name }}</td>
+                            <td>{{ worker.run_count }}</td>
+                            {% if any_links %}
+                                <td>
+                                    {% if worker.link %}
+                                        <a href="{{ worker.link }}">{{ worker.link }}</a>
+                                    {% endif %}
+                                </td>
+                            {% endif %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <script>
+                $(document).ready(function() {
+                    $('#workers-table').DataTable({
+                        "pageLength": 50,
+                        "order": [[1, "desc"]]
+                    });
+                });
+            </script>
+        {% else %}
+            <p>No workers have connected yet.</p>
+        {% endif %}
     </div>
 {% endblock body %}
