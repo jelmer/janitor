@@ -9,6 +9,7 @@
 {% block body %}
     <div class="section" id="publish-history">
         <h1>Publish History</h1>
+        <p><em>A log of publish actions (push or merge proposal) the Janitor has taken.</em></p>
         {% if is_admin %}
             <button id="scan">Refresh Merge Proposal Status</button>
             <button id="autopublish">Automatically Publish</button>
@@ -48,7 +49,7 @@
                             <a href="{{ id }}">{{ format_timestamp(timestamp) }}</a>
                         </td>
                         <td>
-                            <a class="reference external" href="../pkg/{{ codebase }}">{{ codebase }}</a>
+                            <a class="reference external" href="/cupboard/c/{{ codebase }}/">{{ codebase }}</a>
                         </td>
                         <td>{{ branch_name }}</td>
                         <td>{{ mode }}</td>
@@ -68,6 +69,10 @@
                                 {% if vcs_browser %}- <a href="{{ vcs_browser }}">Branch</a>{% endif %}
                             {% endif %}
                         </td>
+                    </tr>
+                {% else %}
+                    <tr class="row-even">
+                        <td colspan="5">No publish actions yet.</td>
                     </tr>
                 {% endfor %}
             </tbody>

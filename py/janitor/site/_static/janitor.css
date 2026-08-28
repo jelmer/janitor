@@ -90,3 +90,11 @@ td.version {
 tr.active {
     background-color: bisque;
 }
+
+/* Single-line "nothing to show yet" messages - a literal bullet point in
+   front of a one-item list reads oddly for what is really just a status
+   sentence. */
+ul.empty-state {
+    list-style: none;
+    padding-left: 0;
+}

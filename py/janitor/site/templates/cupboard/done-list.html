@@ -8,6 +8,7 @@
 {% block body %}
     <div class="section" id="history">
         <h1>Changes that have been merged or pushed</h1>
+        <p><em>Runs whose changes have already been merged or pushed to the target branch.</em></p>
         <form method="get" action="{{ url }}">
             <label for="start">Start date:</label>
             <input type="date"
@@ -19,6 +20,9 @@
             <input type="submit" value="Refresh" />
         </form>
         {% set ns = namespace(last_date=None, run_date=None) %}
+        {% if not runs %}
+            <p>No changes have been merged or pushed yet. See what is <a href="/cupboard/ready">ready to publish</a> or currently <a href="/cupboard/queue">queued</a>.</p>
+        {% else %}
         <ul>
             {% for run in runs %}
                 {% if run.absorbed_at %}
@@ -51,5 +55,6 @@
                 </li>
             {% endfor %}
         </ul>
+        {% endif %}
     </div>
 {% endblock body %}

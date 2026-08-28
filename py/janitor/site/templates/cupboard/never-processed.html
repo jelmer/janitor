@@ -8,7 +8,8 @@
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="{{ code }}">
-        <h1>never-processed</h1>
+        <h1>Never Processed</h1>
+        <p><em>Codebases queued as candidates for a campaign but never actually run.</em></p>
         {% if is_admin %}
             <form id="mass_reschedule"
                   method="post"
@@ -30,8 +31,8 @@
         {% endif %}
         <table id="never-processed-table" class="display docutils" border="1">
             <colgroup>
-                <col width="21%" />
-                <col width="6%" />
+                <col width="95%" />
+                <col width="5%" />
             </colgroup>
             <thead valign="bottom">
                 <tr>
@@ -46,7 +47,7 @@
                             <a class="reference external" href="/cupboard/c/{{ codebase }}/">{{ codebase }}</a>
                         </td>
                         <td>
-                            <a href="/{{ campaign }}/pkg/{{ codebase }}">{{ campaign }}</a>
+                            <a href="/{{ campaign }}/c/{{ codebase }}/">{{ campaign }}</a>
                         </td>
                     </tr>
                 {% endfor %}

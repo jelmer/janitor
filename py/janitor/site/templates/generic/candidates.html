@@ -8,6 +8,7 @@
 {% block body %}
     <div class="section" id="candidates">
         <h1>{{ suite }} - Candidates</h1>
+        <p><em>Codebases the Janitor has identified as candidates for this campaign.</em></p>
         {% if candidates %}
             <ul>
                 {% for codebase, value in candidates %}
