@@ -46,3 +46,25 @@ async def test_vcs_only(con):
     assert queue_item.codebase == "foo"
     assert queue_item.campaign == "bar"
     assert vcs_info == {"vcs_type": "git"}
+
+
+async def test_next_item_filters_by_campaign(con):
+    # regression: a missing `f` on the campaign condition sent Postgres the
+    # literal `${len(args)}`, so any call with campaign= raised a syntax error
+    queue = Queue(con)
+    await con.execute("INSERT INTO codebase (name) VALUES ('foo')")
+    await queue.add(codebase="foo", campaign="alpha", command="true")
+    await queue.add(codebase="foo", campaign="beta", command="true")
+
+    queue_item, _ = await queue.next_item(campaign="beta")
+    assert queue_item is not None
+    assert queue_item.campaign == "beta"
+
+
+async def test_next_item_campaign_no_match(con):
+    queue = Queue(con)
+    await con.execute("INSERT INTO codebase (name) VALUES ('foo')")
+    await queue.add(codebase="foo", campaign="alpha", command="true")
+
+    queue_item, _ = await queue.next_item(campaign="beta")
+    assert queue_item is None
