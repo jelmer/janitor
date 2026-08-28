@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
 import os
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -30,6 +31,7 @@ from janitor.logs import LogFileManager
 from janitor.runner import (
     ActiveRun,
     Backchannel,
+    QueueItemAlreadyClaimed,
     QueueProcessor,
     WorkerResult,
     _naive_utc,
@@ -669,6 +671,52 @@ async def test_assignment_with_only_vcs(aiohttp_client, db, tmp_path):
         "target_repository": {"url": None, "vcs_type": "hg"},
     }
     await qp.stop()
+
+
+def _make_active_run(*, queue_id, log_id, codebase="foo"):
+    return ActiveRun(
+        campaign="test",
+        change_set=None,
+        command="blah",
+        queue_id=queue_id,
+        log_id=log_id,
+        start_time=datetime.utcnow(),
+        codebase=codebase,
+        vcs_info={},
+        backchannel=Backchannel(),
+        worker_name="tester",
+        instigated_context=None,
+        estimated_duration=timedelta(seconds=10),
+    )
+
+
+async def test_register_run_rejects_duplicate_queue_id():
+    qp = await create_queue_processor()
+    await qp.register_run(_make_active_run(queue_id=1, log_id="first"))
+    with pytest.raises(QueueItemAlreadyClaimed):
+        await qp.register_run(_make_active_run(queue_id=1, log_id="second"))
+    # only the first claim's side-effects are visible
+    assert await qp.redis.hkeys("active-runs") == [b"first"]
+    assert await qp.redis.hkeys("assigned-queue-items") == [b"1"]
+    assert await qp.redis.hget("assigned-queue-items", "1") == b"first"
+
+
+async def test_register_run_concurrent_claims_pick_exactly_one():
+    # regression: hget-then-hset let two register_run calls both claim the
+    # same queue_id. HSETNX makes the claim atomic - exactly one wins.
+    qp = await create_queue_processor()
+    results = await asyncio.gather(
+        qp.register_run(_make_active_run(queue_id=42, log_id="a")),
+        qp.register_run(_make_active_run(queue_id=42, log_id="b")),
+        return_exceptions=True,
+    )
+    successes = [r for r in results if r is None]
+    failures = [r for r in results if isinstance(r, QueueItemAlreadyClaimed)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    winner = await qp.redis.hget("assigned-queue-items", "42")
+    assert winner in (b"a", b"b")
+    assert await qp.redis.hkeys("active-runs") == [winner]
 
 
 def test_naive_utc_from_aware_rfc3339():

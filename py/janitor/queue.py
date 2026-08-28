@@ -156,7 +156,7 @@ LEFT JOIN codebase ON codebase.name = queue.codebase
             conditions.append(f"queue.codebase = ${len(args)}")
         if campaign:
             args.append(campaign)
-            conditions.append("queue.suite = ${len(args)}")
+            conditions.append(f"queue.suite = ${len(args)}")
         if exclude_hosts:
             args.append(exclude_hosts)
             # TODO(jelmer): Use codebase.hostname when kali upgrades to postgres 12+
