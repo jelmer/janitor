@@ -75,7 +75,7 @@
             <li style="display: none">Command: {{ command }}</li>
             <li style="display: none">Build Version: {{ run.build_version }}</li>
         </ul>
-        {{ local_command(command, run.codebase, vcs_type, vcs_url) }}
+        {{ local_command(command, run.codebase, vcs_type, suite) }}
         {% if branch_url or campaign.default_empty %}
             {{ reschedule_button(suite, codebase, "Reschedule") }}
             {{ reschedule_button(suite, codebase, "Reschedule (from scratch)", data={"refresh": "1"}, id="reschedule-refresh") }}

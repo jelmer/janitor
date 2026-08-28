@@ -53,7 +53,7 @@
                 <div class="section" id="ready-changes">
                     <h2>Ready changes</h2>
                     {% if run.result_branches %}{{ publish_buttons(suite, run.codebase) }}{% endif %}
-                    {{ merge_command(run.codebase, suite, run.result_branches, vcs) }}
+                    {{ merge_command(run.codebase, suite, run.result_branches, vcs_type) }}
                 </div>
                 {{ display_vcs_diffs(show_diff, run.result_branches, run.result_tags) }}
                 {% if debdiff %}
@@ -68,7 +68,7 @@
                 {% endif %}
             {% endif %}
             <h3>Run locally</h3>
-            {{ local_command(command, run.codebase, vcs, vcs_url) }}
+            {{ local_command(command, run.codebase, vcs_type, suite) }}
             <h3>More details</h3>
             <p>
                 <a href="/cupboard/c/{{ run.codebase }}/{{ run_id }}/">Full run details</a>
