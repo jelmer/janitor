@@ -360,7 +360,7 @@ async def generate_done_list(
             )
         runs.append(run)
 
-    return {"oldest": oldest, "runs": runs, "campaign": campaign, "since": since}
+    return {"oldest": oldest, "runs": runs, "campaign": campaign, "suite": campaign, "since": since}
 
 
 class MergeProposalUserUrlResolver:

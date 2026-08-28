@@ -1,18 +1,19 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% if not campaign %}
+    {% if not suite %}
         {% include "cupboard/sidebar.html" %}
     {% else %}
-        {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
+        {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
     {% endif %}
 {% endblock sidebar %}
 {% block page_title %}
     Changes That Have Been Merged or Pushed
-    {% if campaign %}- {{ campaign }}{% endif %}
+    {% if suite %}- {{ suite }}{% endif %}
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="history">
         <h1>Changes that have been merged or pushed</h1>
+        <p><em>Runs whose changes have already been merged or pushed to the target branch.</em></p>
         <form method="get" action="{{ url }}">
             <label for="start">Start date:</label>
             <input type="date"
