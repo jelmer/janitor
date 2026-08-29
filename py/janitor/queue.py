@@ -180,8 +180,8 @@ LIMIT 1
         vcs_info = {}
         if row["branch_url"]:
             vcs_info["branch_url"] = row["branch_url"]
-        if row["subpath"] is not None:
-            vcs_info["subpath"] = row["subpath"]
+        # subpath is a required (non-Option) PathBuf worker-side
+        vcs_info["subpath"] = row["subpath"] or ""
         if row["vcs_type"]:
             vcs_info["vcs_type"] = row["vcs_type"]
         return QueueItem.from_row(row), vcs_info

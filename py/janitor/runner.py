@@ -2044,7 +2044,7 @@ async def handle_codebases_upload(request):
                 entry["branch_url"],
                 entry["url"],
                 entry.get("branch"),
-                entry.get("subpath"),
+                entry.get("subpath") or "",
                 entry.get("vcs_type"),
                 entry.get("vcs_last_revision"),
                 entry.get("value"),
