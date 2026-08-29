@@ -536,9 +536,21 @@ async def handle_runner_kill(request):
     with span.new_child("runner:kill"):
         url = URL(request.app["runner_url"]) / "kill" / run_id
         try:
-            async with request.app["http_client_session"].post(
-                url, raise_for_status=True
-            ) as resp:
+            async with request.app["http_client_session"].post(url) as resp:
+                if resp.status == 501:
+                    return web.json_response(
+                        {
+                            "reason": await resp.text()
+                            or "kill not supported for this type of run"
+                        },
+                        status=501,
+                    )
+                if resp.status == 410:
+                    return web.json_response(
+                        {"reason": await resp.text() or "worker has no active run"},
+                        status=410,
+                    )
+                resp.raise_for_status()
                 return web.json_response(await resp.json(), status=resp.status)
         except ContentTypeError as e:
             return web.json_response(
