@@ -261,7 +261,7 @@ async def test_submit_codebase(aiohttp_client, db):
             "branch_url": "https://example.com/foo.git",
             "url": "https://example.com/foo.git",
             "branch": None,
-            "subpath": None,
+            "subpath": "",
             "vcs_type": None,
             "vcs_last_revision": None,
             "value": None,
