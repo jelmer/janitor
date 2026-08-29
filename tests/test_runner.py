@@ -810,9 +810,11 @@ async def test_kill_no_active_run(aiohttp_client):
     qp = await create_queue_processor()
 
     worker_app = web.Application()
-    worker_app.router.add_post(
-        "/kill", lambda request: web.Response(status=410, text="no run in progress")
-    )
+
+    async def _handle_kill_no_run(request):
+        return web.Response(status=410, text="no run in progress")
+
+    worker_app.router.add_post("/kill", _handle_kill_no_run)
     worker_client = await aiohttp_client(worker_app)
 
     await _register_dummy_active_run(
@@ -832,10 +834,11 @@ async def test_kill_not_supported(aiohttp_client):
     qp = await create_queue_processor()
 
     worker_app = web.Application()
-    worker_app.router.add_post(
-        "/kill",
-        lambda request: web.Response(status=501, text="kill is not yet supported"),
-    )
+
+    async def _handle_kill_not_supported(request):
+        return web.Response(status=501, text="kill is not yet supported")
+
+    worker_app.router.add_post("/kill", _handle_kill_not_supported)
     worker_client = await aiohttp_client(worker_app)
 
     await _register_dummy_active_run(
