@@ -277,6 +277,21 @@ async def handle_done_proposals(request):
     return await generate_done_list(request.app["pool"], campaign, since)
 
 
+async def handle_generic_codebase_query_redirect(request):
+    # Bare /{campaign}/c?codebase=X (or the older ?package=X) has no route
+    # of its own - the real page lives at /{campaign}/c/{codebase}/. Anyone
+    # typing or bookmarking the query-string form should land on the real
+    # page rather than a 404.
+    codebase = request.query.get("codebase") or request.query.get("package")
+    if not codebase:
+        raise web.HTTPNotFound(text="no codebase specified")
+    raise web.HTTPFound(
+        request.app.router["generic-codebase"].url_for(
+            campaign=request.match_info["campaign"], codebase=codebase
+        )
+    )
+
+
 @html_template("generic/codebase.html", headers={"Vary": "Cookie"})
 async def handle_generic_codebase(request):
     from .common import generate_codebase_context
@@ -521,6 +536,11 @@ async def create_app(
         "/{suite:" + CAMPAIGN_REGEX + "}/candidates",
         handle_generic_candidates,
         name="generic-candidates",
+    )
+    app.router.add_get(
+        "/{campaign:" + CAMPAIGN_REGEX + "}/c",
+        handle_generic_codebase_query_redirect,
+        name="generic-codebase-query-redirect",
     )
     app.router.add_get(
         "/{campaign:" + CAMPAIGN_REGEX + "}/c/{codebase}/",
