@@ -2039,17 +2039,17 @@ async def handle_codebases_upload(request):
                 else:
                     entry["branch_url"] = entry["url"] = None
 
-            await insert_codebase_stmt.fetchrow(
-                entry.get("name"),
-                entry["branch_url"],
-                entry["url"],
-                entry.get("branch"),
-                entry.get("subpath") or "",
-                entry.get("vcs_type"),
-                entry.get("vcs_last_revision"),
-                entry.get("value"),
-                entry.get("web_url"),
-            )
+                await insert_codebase_stmt.fetchrow(
+                    entry.get("name"),
+                    entry["branch_url"],
+                    entry["url"],
+                    entry.get("branch"),
+                    entry.get("subpath") or "",
+                    entry.get("vcs_type"),
+                    entry.get("vcs_last_revision"),
+                    entry.get("value"),
+                    entry.get("web_url"),
+                )
 
             # TODO(jelmer): if anything meaningful has changed (name,
             # branch_url, subpath), reschedule all runs for this codebase:
