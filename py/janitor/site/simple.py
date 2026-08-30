@@ -94,7 +94,7 @@ async def handle_simple(templatename, request):
 
 @html_template("generic/start.html")
 async def handle_generic_start(request):
-    return {"suite": request.match_info["campaign"]}
+    return {"campaign": request.match_info["campaign"]}
 
 
 @html_template("generic/candidates.html", headers={"Vary": "Cookie"})

@@ -1,9 +1,9 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% if not suite %}
+    {% if not campaign %}
         {% include "cupboard/sidebar.html" %}
     {% else %}
-        {% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
+        {% include [campaign + "-sidebar.html", "generic/sidebar.html"] %}
     {% endif %}
 {% endblock sidebar %}
 {% block page_title %}
@@ -22,7 +22,7 @@
                 {% endif %}
             </a>
             {% if proposal.suite %}(<a href="/{{ proposal.suite }}/c/{{ proposal.codebase }}/">Details</a>){% endif %}
-            {% if not suite %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
+            {% if not campaign %}(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>){% endif %}
         {% endmacro %}
         {% if not (open_proposals or merged_proposals or closed_proposals or abandoned_proposals or rejected_proposals) %}
             <ul class="simple empty-state">

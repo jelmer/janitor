@@ -85,7 +85,7 @@
             function refreshData(cb) {
                 console.log("Updating backlog of todo items");
                 $.ajax({
-			url: '/cupboard/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only={{ 'true' if required_only else 'false' }}&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
+			url: '/cupboard/api/{% if campaign %}{{ campaign }}/{% endif %}needs-review?required_only={{ 'true' if required_only else 'false' }}&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true ' if publishable_only else 'false ' }}',
                     dataType: 'json',
                     success: function(data) {
                         data.forEach(function(entry) {
@@ -139,8 +139,8 @@
         <form action="/cupboard/review" method="post" id="options">
             <input type="hidden" name="run_id" id="run-id" value="{{ run_id }}" />
             <input type="hidden" name="codebase" id="codebase" value="{{ codebase }}" />
-            {% if suites %}
-                {% for s in suites %}<input type="hidden" name="suites[]" value="{{ s }}" />{% endfor %}
+            {% if campaigns %}
+                {% for s in campaigns %}<input type="hidden" name="suites[]" value="{{ s }}" />{% endfor %}
             {% endif %}
             <input class="review-button"
                    type="submit"
