@@ -271,6 +271,25 @@ async def test_submit_codebase(aiohttp_client, db):
     ] == await resp.json()
 
 
+async def test_submit_codebase_multiple(aiohttp_client, db):
+    qp = await create_queue_processor(db)
+    client = await create_client(aiohttp_client, qp)
+    resp = await client.post(
+        "/codebases",
+        json=[
+            {"name": "foo", "branch_url": "https://example.com/foo.git"},
+            {"name": "bar", "branch_url": "https://example.com/bar.git"},
+            {"name": "baz", "branch_url": "https://example.com/baz.git"},
+        ],
+    )
+    assert resp.status == 200
+    assert {} == await resp.json()
+
+    resp = await client.get("/codebases")
+    assert resp.status == 200
+    assert {"foo", "bar", "baz"} == {c["name"] for c in await resp.json()}
+
+
 async def test_candidate_invalid_value(aiohttp_client, db, tmp_path):
     vcs = tmp_path / "vcs"
     vcs.mkdir()
