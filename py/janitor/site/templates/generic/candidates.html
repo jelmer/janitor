@@ -1,19 +1,19 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
+    {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
 {% endblock sidebar %}
 {% block page_title %}
-    {{ suite }} - Candidates
+    {{ campaign }} - Candidates
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="candidates">
-        <h1>{{ suite }} - Candidates</h1>
+        <h1>{{ campaign }} - Candidates</h1>
         <p><em>Codebases the Janitor has identified as candidates for this campaign.</em></p>
         {% if candidates %}
             <ul>
                 {% for codebase, value in candidates %}
                     <li>
-                        <a href="/{{ suite }}/c/{{ codebase }}/">{{ codebase }}</a>
+                        <a href="/{{ campaign }}/c/{{ codebase }}/">{{ codebase }}</a>
                     </li>
                 {% endfor %}
             </ul>

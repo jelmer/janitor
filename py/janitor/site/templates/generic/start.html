@@ -1,14 +1,14 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
+    {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
 {% endblock sidebar %}
 {% block page_title %}
-    {{ suite }}
+    {{ campaign }}
 {% endblock page_title %}
 {% block body %}
-    <div class="section" id="{{ suite }}">
-        <h1>{{ suite }}</h1>
-        <p><em>Status pages for the {{ suite }} campaign.</em></p>
+    <div class="section" id="{{ campaign }}">
+        <h1>{{ campaign }}</h1>
+        <p><em>Status pages for the {{ campaign }} campaign.</em></p>
         <div class="toctree-wrapper compound">
             <ul>
                 <li class="toctree-l1">

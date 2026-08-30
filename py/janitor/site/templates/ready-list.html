@@ -1,14 +1,14 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-    {% if not suite %}
+    {% if not campaign %}
         {% include "cupboard/sidebar.html" %}
     {% else %}
-        {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
+        {% include [campaign + "/sidebar.html", "generic/sidebar.html"] %}
     {% endif %}
 {% endblock sidebar %}
 {% block page_title %}
     Changes Ready to Publish
-    {% if suite %}- {{ suite }}{% endif %}
+    {% if campaign %}- {{ campaign }}{% endif %}
 {% endblock page_title %}
 {% block body %}
     <div class="section" id="history">
