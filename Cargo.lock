@@ -1259,9 +1259,9 @@ dependencies = [
 
 [[package]]
 name = "deb822-lossless"
-version = "0.5.14"
+version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faaa7a773199a9a6d6bcacd9a838bf55de295bc2f918870d5245712efca46d74"
+checksum = "31505d7661ac33d7848f1fb6ba82bd269b853d01fb44a1bfd9451ffad10c0005"
 dependencies = [
  "pyo3",
  "regex",
@@ -1325,9 +1325,9 @@ dependencies = [
 
 [[package]]
 name = "debian-control"
-version = "0.3.8"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f530d98a170c3ff21b1c7001a640cd0c038fe18814e6b1fed41ac52d9074b98d"
+checksum = "2ec825d3da4fc04cac8dfaf42b2a22085d004f2c8c7501bd9a05620d430523f8"
 dependencies = [
  "chrono",
  "deb822-fast",
