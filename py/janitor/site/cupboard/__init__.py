@@ -470,7 +470,7 @@ async def handle_run_redirect(request):
     run_id = request.match_info["run_id"]
 
     async with request.app["pool"].acquire() as conn:
-        codebase = await conn.fetchone("SELECT codebase FROM run WHERE id = $1", run_id)
+        codebase = await conn.fetchval("SELECT codebase FROM run WHERE id = $1", run_id)
         if codebase is None:
             raise web.HTTPNotFound(text=f"No such run: {run_id}")
         raise web.HTTPPermanentRedirect(
