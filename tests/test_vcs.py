@@ -97,8 +97,8 @@ def test_is_alioth_url():
 
 def test_get_vcs_managers():
     assert {
-        "bzr": RemoteBzrVcsManager("https://example.com/bzr"),
-        "git": RemoteGitVcsManager("https://example.com/git"),
+        "bzr": RemoteBzrVcsManager("https://example.com/bzr/"),
+        "git": RemoteGitVcsManager("https://example.com/git/"),
     } == get_vcs_managers("https://example.com/")
     assert {"git": RemoteGitVcsManager("https://example.com/git/")} == get_vcs_managers(
         "git=https://example.com/git/"
