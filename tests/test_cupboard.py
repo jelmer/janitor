@@ -274,3 +274,27 @@ async def test_codebase_redirect_unknown_codebase_returns_404(aiohttp_client, db
     client = await create_client(aiohttp_client, db)
     resp = await client.get("/cupboard/c/nonexistent/", allow_redirects=False)
     assert resp.status == 404
+
+
+async def test_run_redirect(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    async with db.acquire() as conn:
+        await _insert_codebase(conn, "foo")
+        now = datetime.utcnow()
+        await _insert_run(
+            conn,
+            run_id="somerun",
+            codebase="foo",
+            start_time=now - timedelta(minutes=30),
+            finish_time=now,
+        )
+
+    resp = await client.get("/cupboard/run/somerun/", allow_redirects=False)
+    assert resp.status == 308
+    assert resp.headers["Location"] == "/cupboard/c/foo/somerun/"
+
+
+async def test_run_redirect_unknown_run_returns_404(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    resp = await client.get("/cupboard/run/nonexistent/", allow_redirects=False)
+    assert resp.status == 404
