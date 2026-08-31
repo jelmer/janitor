@@ -167,15 +167,13 @@ async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: Head
     }
 }
 
-async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Json<Option<String>> {
-    Json(
-        state
-            .read()
-            .unwrap()
-            .assignment
-            .as_ref()
-            .map(|a| a.id.clone()),
-    )
+async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Option<String> {
+    state
+        .read()
+        .unwrap()
+        .assignment
+        .as_ref()
+        .map(|a| a.id.clone())
 }
 
 async fn get_log_file(
