@@ -94,7 +94,14 @@ async def handle_simple(templatename, request):
 
 @html_template("generic/start.html")
 async def handle_generic_start(request):
-    return {"campaign": request.match_info["campaign"]}
+    from ..config import get_campaign_config
+
+    campaign = request.match_info["campaign"]
+    campaign_config = get_campaign_config(request.app["config"], campaign)
+    return {
+        "campaign": campaign,
+        "campaign_command": campaign_config.command if campaign_config else None,
+    }
 
 
 @html_template("generic/candidates.html", headers={"Vary": "Cookie"})
