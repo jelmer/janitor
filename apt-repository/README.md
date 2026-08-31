@@ -63,8 +63,8 @@ With `acquire_by_hash(true)`, a `by-hash/` subtree is also written.
 
 ## Features
 
-- `async` (default) — enables `AsyncRepository` and async provider traits via tokio
+- `async` (default) - enables `AsyncRepository` and async provider traits via tokio
 
 ## License
 
-GPL-3.0+
+Apache-2.0+

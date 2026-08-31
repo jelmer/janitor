@@ -2,8 +2,8 @@
 name = "apt-repository"
 version = "0.1.0"
 edition = "2021"
-description = "A Rust library for creating and parsing APT repositories"
-license = "GPL-3.0+"
+description = "Creating and parsing APT repositories"
+license = "Apache-2.0"
 repository = "https://github.com/jelmer/janitor.git"
 homepage = "https://github.com/jelmer/janitor"
 keywords = ["apt", "debian", "package", "repository"]
