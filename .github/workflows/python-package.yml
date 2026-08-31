@@ -18,6 +18,7 @@ env:
             libpython3-dev
             libssl-dev
             pkg-config
+            nettle-dev
             protobuf-compiler
   EXTRA_DEB: |
             ca-certificates

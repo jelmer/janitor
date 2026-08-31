@@ -14,6 +14,7 @@ RUN apt-get update --yes \
         libpython3-dev \
         libssl-dev \
         pkg-config \
+        nettle-dev \
         protobuf-compiler \
         python3-minimal \
  && apt-get clean
