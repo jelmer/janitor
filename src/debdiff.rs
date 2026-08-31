@@ -257,9 +257,20 @@ pub async fn run_debdiff(
     }
 
     let output = cmd.output().await?;
-    if !output.status.success() {
+    // debdiff(1) exit codes: 0 = packages identical, 1 = differences
+    // found (the typical, expected outcome). Anything else is a real
+    // error (missing file, malformed package, etc). The earlier code
+    // treated exit 1 as an error and returned an empty `DebdiffError:
+    // ` (because debdiff prints the diff to stdout, not stderr) -
+    // every successful debdiff call hit the 503 path.
+    let code = output.status.code();
+    if code != Some(0) && code != Some(1) {
         return Err(DebdiffError {
-            message: String::from_utf8_lossy(&output.stderr).to_string(),
+            message: format!(
+                "debdiff exited with status {:?}: {}",
+                code,
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
         });
     }
     Ok(output.stdout)
