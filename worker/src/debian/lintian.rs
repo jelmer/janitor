@@ -19,13 +19,59 @@ impl std::fmt::Display for Error {
     }
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug, Default, Clone)]
+pub struct LintianPointerItem {
+    #[serde(default)]
+    pub index: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum LintianPointer {
+    Structured {
+        #[serde(default)]
+        item: LintianPointerItem,
+        #[serde(default)]
+        line_position: i64,
+    },
+    Inline(String),
+    Other(serde_json::Value),
+}
+
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug, Default, Clone)]
+pub struct LintianHintObject {
+    #[serde(default)]
+    pub tag: String,
+    #[serde(default)]
+    pub visibility: String,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub experimental: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pointer: Option<LintianPointer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen: Option<String>,
+}
+
+/// A lintian hint. Older lintian emitted each hint as a plain string;
+/// lintian 2.135 switched to a structured object.
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug, Clone)]
+#[serde(untagged)]
+pub enum LintianHint {
+    Structured(LintianHintObject),
+    Inline(String),
+}
+
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug)]
 pub struct LintianInputFile {
-    pub hints: Vec<String>,
+    pub hints: Vec<LintianHint>,
     pub path: PathBuf,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, serde::Serialize, Debug)]
 pub struct LintianGroup {
     pub group_id: String,
     pub input_files: Vec<LintianInputFile>,
@@ -33,7 +79,7 @@ pub struct LintianGroup {
     pub source_version: debversion::Version,
 }
 
-#[derive(serde::Deserialize, PartialEq, Eq, Default, serde::Serialize, Debug)]
+#[derive(serde::Deserialize, PartialEq, Default, serde::Serialize, Debug)]
 pub struct LintianResult {
     pub groups: Vec<LintianGroup>,
     pub lintian_version: Option<debversion::Version>,
@@ -161,5 +207,218 @@ OTHER BOGUS DATA
                 lintian_version: Some("2.116.3".parse().unwrap())
             }
         );
+    }
+
+    #[test]
+    fn test_parse_lintian_output_with_real_hint_objects() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "hello_2.10-5",
+         "input_files" : [
+            {
+               "hints" : [
+                  {
+                     "experimental" : false,
+                     "note" : "sid unstable",
+                     "tag" : "distribution-and-changes-mismatch",
+                     "visibility" : "warning"
+                  }
+               ],
+               "path" : "./hello_2.10-5_amd64.changes"
+            }
+         ],
+         "source_name" : "hello",
+         "source_version" : "2.10-5"
+      }
+   ],
+   "lintian_version" : "2.135.0"
+}
+"#;
+        let result = parse_lintian_output(output_str).expect("real hints must parse");
+        let hints = &result.groups[0].input_files[0].hints;
+        assert_eq!(hints.len(), 1);
+        match &hints[0] {
+            LintianHint::Structured(hint) => {
+                assert_eq!(hint.tag, "distribution-and-changes-mismatch");
+                assert_eq!(hint.visibility, "warning");
+                assert_eq!(hint.note, "sid unstable");
+                assert!(!hint.experimental);
+            }
+            other => panic!("expected Structured hint, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_lintian_output_with_2_135_pointer_object() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "okio_1.16.0-3~jan+lint1",
+         "input_files" : [
+            {
+               "hints" : [
+                  {
+                     "experimental" : false,
+                     "note" : "lintian-fixes != sid",
+                     "pointer" : {
+                        "item" : {
+                           "index" : "libokio-java-doc_1.16.0-3~jan+lint1_all.deb (installed)",
+                           "name" : "usr/share/doc/libokio-java-doc/changelog.Debian.gz"
+                        },
+                        "line_position" : 1
+                     },
+                     "tag" : "changelog-distribution-does-not-match-changes-file",
+                     "visibility" : "warning"
+                  }
+               ],
+               "path" : "./okio_1.16.0-3~jan+lint1_amd64.changes"
+            }
+         ],
+         "source_name" : "okio",
+         "source_version" : "1.16.0-3~jan+lint1"
+      }
+   ],
+   "lintian_version" : "2.135.0"
+}
+"#;
+        let result =
+            parse_lintian_output(output_str).expect("2.135 pointer-object hints must parse");
+        let hints = &result.groups[0].input_files[0].hints;
+        assert_eq!(hints.len(), 1);
+        let hint = match &hints[0] {
+            LintianHint::Structured(h) => h,
+            other => panic!("expected Structured hint, got {:?}", other),
+        };
+        assert_eq!(
+            hint.tag,
+            "changelog-distribution-does-not-match-changes-file"
+        );
+        let pointer = hint.pointer.as_ref().expect("pointer should be retained");
+        match pointer {
+            LintianPointer::Structured {
+                item,
+                line_position,
+            } => {
+                assert_eq!(*line_position, 1);
+                assert_eq!(
+                    item.name,
+                    "usr/share/doc/libokio-java-doc/changelog.Debian.gz"
+                );
+                assert!(item.index.starts_with("libokio-java-doc"));
+            }
+            other => panic!("expected Structured pointer, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_parse_lintian_output_with_string_pointer() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "x_1",
+         "input_files" : [
+            {
+               "hints" : [
+                  {
+                     "tag" : "trailing-whitespace",
+                     "visibility" : "info",
+                     "note" : "",
+                     "experimental" : false,
+                     "pointer" : "debian/changelog:42"
+                  }
+               ],
+               "path" : "x.dsc"
+            }
+         ],
+         "source_name" : "x",
+         "source_version" : "1"
+      }
+   ],
+   "lintian_version" : "2.116.3"
+}
+"#;
+        let result =
+            parse_lintian_output(output_str).expect("string-pointer hints must still parse");
+        let hint = match &result.groups[0].input_files[0].hints[0] {
+            LintianHint::Structured(h) => h,
+            other => panic!("expected Structured hint, got {:?}", other),
+        };
+        let pointer = hint.pointer.as_ref().expect("pointer should be retained");
+        match pointer {
+            LintianPointer::Inline(s) => assert_eq!(s, "debian/changelog:42"),
+            other => panic!("expected Inline pointer, got {:?}", other),
+        }
+    }
+
+    /// Older lintian emitted each hint as a plain string rather than an object.
+    #[test]
+    fn test_parse_lintian_output_with_string_hints() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "x_1",
+         "input_files" : [
+            {
+               "hints" : [
+                  "debian-changelog-line-too-long line 1",
+                  "no-copyright-file"
+               ],
+               "path" : "x.dsc"
+            }
+         ],
+         "source_name" : "x",
+         "source_version" : "1"
+      }
+   ],
+   "lintian_version" : "2.100.0"
+}
+"#;
+        let result = parse_lintian_output(output_str).expect("string hints must parse");
+        let hints = &result.groups[0].input_files[0].hints;
+        assert_eq!(hints.len(), 2);
+        assert_eq!(
+            hints[0],
+            LintianHint::Inline("debian-changelog-line-too-long line 1".to_owned())
+        );
+        assert_eq!(
+            hints[1],
+            LintianHint::Inline("no-copyright-file".to_owned())
+        );
+    }
+
+    #[test]
+    fn test_parse_lintian_output_tolerates_extra_hint_fields() {
+        let output_str = r#"{
+   "groups" : [
+      {
+         "group_id" : "x_1",
+         "input_files" : [
+            {
+               "hints" : [
+                  {
+                     "tag" : "some-tag",
+                     "visibility" : "info",
+                     "note" : "",
+                     "experimental" : false,
+                     "future_field" : "ignored"
+                  }
+               ],
+               "path" : "x.dsc"
+            }
+         ],
+         "source_name" : "x",
+         "source_version" : "1"
+      }
+   ],
+   "lintian_version" : "2.135.0"
+}
+"#;
+        let result = parse_lintian_output(output_str).unwrap();
+        let hint = match &result.groups[0].input_files[0].hints[0] {
+            LintianHint::Structured(h) => h,
+            other => panic!("expected Structured hint, got {:?}", other),
+        };
+        assert_eq!(hint.tag, "some-tag");
     }
 }
