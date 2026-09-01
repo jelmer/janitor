@@ -46,8 +46,6 @@ pub fn new_source(package: &str, version: &str, architecture: &str, directory: &
         checksums_sha1: None,
         checksums_sha256: None,
         checksums_sha512: None,
-        uploaders: None,
-        extra_source_only: None,
     }
 }
 
