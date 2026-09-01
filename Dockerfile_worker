@@ -11,6 +11,7 @@ RUN apt-get update --yes \
  && apt-get satisfy --yes --no-install-recommends \
         ca-certificates \
         cargo \
+        libclang-dev \
         libpython3-dev \
         libssl-dev \
         pkg-config \

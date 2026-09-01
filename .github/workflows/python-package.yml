@@ -15,6 +15,7 @@ env:
             g++
             gcc
             git
+            libclang-dev
             libpython3-dev
             libssl-dev
             pkg-config

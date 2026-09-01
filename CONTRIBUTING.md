@@ -16,8 +16,10 @@ $ sudo apt install \
     cargo \
     gcc \
     git \
+    libclang-dev \
     libpython3-dev \
     libssl-dev \
+    nettle-dev \
     pkg-config \
     protobuf-compiler \
     python3-gpg
