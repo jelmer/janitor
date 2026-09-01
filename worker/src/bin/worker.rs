@@ -72,6 +72,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     args.logging.init();
 
+    // Load breezy plugins so VCS URL handlers (notably
+    // breezy.plugins.debian.directory, which normalises
+    // "https://.../pkg.git -b branch" into ",branch=branch") are
+    // registered before the first open_branch_ext call. Without
+    // this, Debian Vcs-Git-style URLs intermittently hit
+    // "Connection closed early".
+    if !breezyshim::plugin::load_plugins() {
+        log::debug!("breezy plugins were already loaded");
+    }
+
     let state = Arc::new(RwLock::new(AppState {
         assignment: None,
         output_directory: None,
