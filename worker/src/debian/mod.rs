@@ -108,6 +108,14 @@ pub fn debian_make_changes(
 
     let mut extra_env = HashMap::new();
     extra_env.insert("DIST".to_string(), dist_command);
+
+    // Suppress ANSI colour escapes in codemod output; without this the
+    // codemod.log winds up full of escape sequences that render as
+    // gibberish in the run-detail page. TERM=dumb is a fallback for
+    // tools that ignore NO_COLOR.
+    extra_env.insert("NO_COLOR".to_string(), "1".to_string());
+    extra_env.insert("TERM".to_string(), "dumb".to_string());
+
     for (k, v) in env {
         extra_env.insert(k, v);
     }
