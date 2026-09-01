@@ -900,14 +900,16 @@ pub fn run_worker(
 }
 
 fn derive_branch_name(url: &url::Url) -> String {
-    breezyshim::urlutils::split_segment_parameters(url)
+    let url_str = breezyshim::urlutils::split_segment_parameters(url)
         .0
         .to_string()
         .trim_end_matches('/')
+        .to_string();
+
+    url_str
         .rsplit_once('/')
-        .unwrap()
-        .1
-        .to_string()
+        .map(|(_, name)| name.to_string())
+        .unwrap_or_else(|| url_str)
 }
 
 pub enum SingleItemError {
@@ -1216,6 +1218,22 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
     use test_log::test;
+
+    #[test]
+    fn test_derive_branch_name() {
+        assert_eq!(
+            derive_branch_name(&url::Url::parse("https://example.com/foo/bar").unwrap()),
+            "bar"
+        );
+        assert_eq!(
+            derive_branch_name(&url::Url::parse("https://example.com/foo/bar/").unwrap()),
+            "bar"
+        );
+        assert_eq!(
+            derive_branch_name(&url::Url::parse("https://example.com/").unwrap()),
+            "example.com"
+        );
+    }
 
     #[test]
     fn test_convert_codemod_script_failed() {
