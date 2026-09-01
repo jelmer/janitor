@@ -5,7 +5,6 @@ use reqwest::multipart::{Form, Part};
 use reqwest::{Error as ReqwestError, Response, StatusCode, Url};
 use std::error::Error;
 use std::path::Path;
-use tokio::io::AsyncReadExt;
 
 #[derive(Debug)]
 pub enum AssignmentError {
@@ -286,11 +285,22 @@ impl Client {
     }
 }
 
+/// A multipart form ready to be uploaded, plus the set of filenames it contains.
+#[derive(Debug)]
+pub struct BundleInfo {
+    pub form: Form,
+    pub filenames: std::collections::HashSet<String>,
+}
+
+/// Build a multipart form containing `metadata` and every file directly under `directory`.
+///
+/// Files are attached as streaming parts so the whole bundle never has to be held in memory.
 pub async fn bundle_results<'a>(
     metadata: &'a Metadata,
     directory: Option<&'a Path>,
-) -> Result<Form, Box<dyn Error + Send + Sync>> {
+) -> Result<BundleInfo, Box<dyn Error + Send + Sync>> {
     let mut form = Form::new();
+    let mut filenames = std::collections::HashSet::new();
 
     let json_part = Part::text(serde_json::to_string(metadata)?)
         .file_name("result.json")
@@ -299,22 +309,31 @@ pub async fn bundle_results<'a>(
 
     if let Some(directory) = directory {
         let mut dir = tokio::fs::read_dir(directory).await?;
-
         while let Some(entry) = dir.next_entry().await? {
-            if entry.file_type().await?.is_file() {
-                let mut file = tokio::fs::File::open(entry.path()).await?;
-                let mut buffer = Vec::new();
-                file.read_to_end(&mut buffer).await?;
-
-                let part = Part::bytes(buffer)
-                    .file_name(entry.file_name().to_string_lossy().into_owned())
-                    .mime_str("application/octet-stream")?;
-                form = form.part("file", part);
+            if !entry.file_type().await?.is_file() {
+                continue;
             }
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            filenames.insert(file_name.clone());
+
+            let file = tokio::fs::File::open(entry.path()).await?;
+            let file_size = file.metadata().await?.len();
+            let buffer_size = if file_size > 1024 * 1024 {
+                64 * 1024
+            } else {
+                8 * 1024
+            };
+
+            let stream = tokio_util::io::ReaderStream::with_capacity(file, buffer_size);
+            let body = reqwest::Body::wrap_stream(stream);
+            let part = Part::stream_with_length(body, file_size)
+                .file_name(file_name)
+                .mime_str("application/octet-stream")?;
+            form = form.part("file", part);
         }
     }
 
-    Ok(form)
+    Ok(BundleInfo { form, filenames })
 }
 
 #[derive(Debug)]
@@ -344,12 +363,12 @@ pub async fn upload_results(
         let builder = client.post(finish_url).timeout(std::time::Duration::from_secs(60));
         let builder = credentials.set_credentials(builder);
         log::debug!("Uploading results: {}", serde_json::to_string(metadata).unwrap());
-        let bundle: Form = bundle_results(metadata, output_directory)
+        let bundle_info = bundle_results(metadata, output_directory)
             .await
             .map_err(|e| {
                 backoff::Error::permanent(UploadFailure(format!("Error creating multipart: {}", e)))
             })?;
-        let response = builder.multipart(bundle).send().await.map_err(|e| {
+        let response = builder.multipart(bundle_info.form).send().await.map_err(|e| {
             backoff::Error::permanent(UploadFailure(format!("Error creating multipart: {}", e)))
         })?;
 
@@ -390,32 +409,9 @@ pub async fn upload_results(
                         e
                     )))
                 })?;
-                if let Some(output_directory) = output_directory {
-                    let mut local_filenames: std::collections::HashSet<_> =
-                        std::collections::HashSet::new();
-                    let mut read_dir =
-                        tokio::fs::read_dir(output_directory).await.map_err(|e| {
-                            backoff::Error::permanent(UploadFailure(format!(
-                                "Error reading output directory: {}",
-                                e
-                            )))
-                        })?;
-                    while let Some(entry) = read_dir.next_entry().await.map_err(|e| {
-                        backoff::Error::permanent(UploadFailure(format!(
-                            "Error reading output directory: {}",
-                            e
-                        )))
-                    })? {
-                        let file_type = entry.file_type().await.map_err(|e| {
-                            backoff::Error::permanent(UploadFailure(format!(
-                                "Error reading output directory: {}",
-                                e
-                            )))
-                        })?;
-                        if file_type.is_file() {
-                            local_filenames.insert(entry.file_name().to_string_lossy().to_string());
-                        }
-                    }
+                if output_directory.is_some() {
+                    // Use the filenames we already collected during bundle creation
+                    let local_filenames = &bundle_info.filenames;
 
                     let runner_filenames: std::collections::HashSet<_> = json
                         .get("filenames")
@@ -428,7 +424,7 @@ pub async fn upload_results(
                         })
                         .unwrap_or_else(std::collections::HashSet::new);
 
-                    if local_filenames != runner_filenames {
+                    if local_filenames != &runner_filenames {
                         log::warn!(
                         "Difference between local filenames and runner reported filenames: {:?} != {:?}",
                         local_filenames,
@@ -449,10 +445,20 @@ pub async fn upload_results(
                     )))
                 })?;
                 log::warn!("Error uploading results: {}: {}", status, text);
-                Err(backoff::Error::transient(UploadFailure(format!(
-                    "ResultUploadFailure: Unable to submit result: {}: {}",
-                    text, status
-                ))))
+                // 4xx means the runner rejected the request (e.g. 409
+                // Conflict when the run was already stored); no point
+                // retrying. 5xx and connection errors stay transient.
+                if status.is_client_error() {
+                    Err(backoff::Error::permanent(UploadFailure(format!(
+                        "ResultUploadFailure: terminal {}: {}",
+                        status, text
+                    ))))
+                } else {
+                    Err(backoff::Error::transient(UploadFailure(format!(
+                        "ResultUploadFailure: Unable to submit result: {}: {}",
+                        text, status
+                    ))))
+                }
             }
         }
     }).await
@@ -469,5 +475,173 @@ pub async fn abort_run(client: &Client, run_id: &str, metadata: &Metadata, descr
         Err(e) => {
             log::warn!("Result upload for abort of {} failed: {}", run_id, e);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        extract::{Path as AxumPath, State},
+        http::StatusCode as AxumStatus,
+        response::IntoResponse,
+        routing::post,
+        Json, Router,
+    };
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    #[tokio::test]
+    async fn bundle_results_without_directory_has_only_metadata() {
+        let metadata = Metadata::default();
+        let bundle = bundle_results(&metadata, None).await.unwrap();
+        assert!(bundle.filenames.is_empty());
+    }
+
+    #[tokio::test]
+    async fn bundle_results_collects_regular_files_and_skips_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        tokio::fs::write(tmp.path().join("a.log"), b"aaa")
+            .await
+            .unwrap();
+        tokio::fs::write(tmp.path().join("b.txt"), b"bbbb")
+            .await
+            .unwrap();
+        tokio::fs::create_dir(tmp.path().join("subdir"))
+            .await
+            .unwrap();
+
+        let metadata = Metadata::default();
+        let bundle = bundle_results(&metadata, Some(tmp.path())).await.unwrap();
+
+        let expected: std::collections::HashSet<String> =
+            ["a.log", "b.txt"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(bundle.filenames, expected);
+    }
+
+    #[derive(Clone)]
+    struct MockState {
+        status: AxumStatus,
+        body: serde_json::Value,
+        hits: Arc<AtomicUsize>,
+    }
+
+    async fn mock_finish(
+        AxumPath(_run_id): AxumPath<String>,
+        State(state): State<MockState>,
+        _body: axum::body::Bytes,
+    ) -> impl IntoResponse {
+        state.hits.fetch_add(1, Ordering::SeqCst);
+        (state.status, Json(state.body.clone()))
+    }
+
+    async fn spawn_mock(state: MockState) -> Url {
+        let app = Router::new()
+            .route("/active-runs/{run_id}/finish", post(mock_finish))
+            .with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app.into_make_service())
+                .await
+                .unwrap();
+        });
+        format!("http://{}/", addr).parse().unwrap()
+    }
+
+    #[tokio::test]
+    async fn upload_results_success_returns_parsed_json() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let state = MockState {
+            status: AxumStatus::OK,
+            body: serde_json::json!({"filenames": []}),
+            hits: hits.clone(),
+        };
+        let base_url = spawn_mock(state).await;
+
+        let metadata = Metadata::default();
+        let result = upload_results(
+            &reqwest::Client::new(),
+            &Credentials::None,
+            &base_url,
+            "run-1",
+            &metadata,
+            None,
+        )
+        .await
+        .expect("expected success");
+
+        assert_eq!(result, serde_json::json!({"filenames": []}));
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn upload_results_4xx_is_permanent_and_not_retried() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let state = MockState {
+            status: AxumStatus::CONFLICT,
+            body: serde_json::json!({"reason": "already-processed"}),
+            hits: hits.clone(),
+        };
+        let base_url = spawn_mock(state).await;
+
+        let metadata = Metadata::default();
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            upload_results(
+                &reqwest::Client::new(),
+                &Credentials::None,
+                &base_url,
+                "run-2",
+                &metadata,
+                None,
+            ),
+        )
+        .await
+        .expect("should not exceed timeout, i.e. should not retry")
+        .expect_err("4xx should surface as an error");
+
+        assert!(
+            err.to_string().contains("terminal"),
+            "expected terminal error message, got: {}",
+            err
+        );
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            1,
+            "4xx must not trigger a retry"
+        );
+    }
+
+    #[tokio::test]
+    async fn upload_results_404_is_permanent_with_reason() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let state = MockState {
+            status: AxumStatus::NOT_FOUND,
+            body: serde_json::json!({"reason": "unknown-run"}),
+            hits: hits.clone(),
+        };
+        let base_url = spawn_mock(state).await;
+
+        let metadata = Metadata::default();
+        let err = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            upload_results(
+                &reqwest::Client::new(),
+                &Credentials::None,
+                &base_url,
+                "run-3",
+                &metadata,
+                None,
+            ),
+        )
+        .await
+        .expect("should not exceed timeout")
+        .expect_err("404 should surface as an error");
+
+        assert_eq!(err.to_string(), "unknown-run");
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 }
