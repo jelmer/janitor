@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import logging
+import secrets
 from datetime import datetime, timedelta
 
 import aiozipkin
@@ -28,7 +29,7 @@ from yarl import URL
 
 from janitor import CAMPAIGN_REGEX
 
-from .. import check_admin
+from .. import check_admin, worker_link_is_global
 from ..setup import setup_logfile_manager, setup_postgres
 
 BUILD_LOG_FILENAME = "build.log"
@@ -384,6 +385,68 @@ async def handle_publish_scan(request):
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=400)
+
+
+@docs()
+@routes.get("/workers", name="admin-workers-list")
+async def handle_workers_list(request):
+    check_admin(request)
+    async with request.app["pool"].acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT worker.name, worker.link, "
+            "count(run.id) AS run_count "
+            "FROM worker "
+            "LEFT JOIN run ON run.worker = worker.name "
+            "GROUP BY worker.name, worker.link "
+            "ORDER BY worker.name"
+        )
+    workers = []
+    for row in rows:
+        link = row["link"] if worker_link_is_global(row["link"]) else None
+        workers.append(
+            {"name": row["name"], "link": link, "run_count": row["run_count"]}
+        )
+    return web.json_response(workers)
+
+
+@docs()
+@routes.post("/workers", name="admin-workers-add")
+async def handle_workers_add(request):
+    check_admin(request)
+    post = await request.post()
+    try:
+        name = post["name"]
+    except KeyError as e:
+        raise web.HTTPBadRequest(text="name not specified") from e
+    link = post.get("link") or None
+    password = secrets.token_urlsafe(24)
+    async with request.app["pool"].acquire() as conn:
+        try:
+            await conn.execute(
+                "INSERT INTO worker (name, password, link) "
+                "VALUES ($1, crypt($2, gen_salt('bf')), $3)",
+                name,
+                password,
+                link,
+            )
+        except asyncpg.UniqueViolationError as e:
+            raise web.HTTPConflict(text=f"worker {name!r} already exists") from e
+    return web.json_response(
+        {"name": name, "link": link, "password": password}, status=201
+    )
+
+
+@docs()
+@routes.delete("/workers/{name}", name="admin-workers-delete")
+async def handle_workers_delete(request):
+    check_admin(request)
+    name = request.match_info["name"]
+    async with request.app["pool"].acquire() as conn:
+        result = await conn.execute("DELETE FROM worker WHERE name = $1", name)
+    # asyncpg returns e.g. "DELETE 1" or "DELETE 0"
+    if result.endswith(" 0"):
+        raise web.HTTPNotFound(text=f"no such worker {name!r}")
+    return web.json_response({"name": name})
 
 
 def create_app(*, config, publisher_url, runner_url, trace_configs=None, db=None):
