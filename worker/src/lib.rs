@@ -19,6 +19,19 @@ use url::Url;
 
 pub const DEFAULT_USER_AGENT: &str = concat!("janitor/worker (", env!("CARGO_PKG_VERSION"), ")");
 
+/// Return a copy of `url` with any embedded basic-auth userinfo
+/// stripped. Worker credentials are baked into cache / target /
+/// resume URLs (via `Credentials::embed_in_url`) so breezy's HTTP
+/// git push can authenticate; those URLs MUST NOT reach a log line
+/// because the cache endpoint is publicly addressable and the
+/// password identifies a specific worker.
+pub(crate) fn sanitise_url_for_log(url: &Url) -> Url {
+    let mut out = url.clone();
+    let _ = out.set_password(None);
+    let _ = out.set_username("");
+    out
+}
+
 pub mod client;
 
 #[cfg(feature = "debian")]
@@ -296,21 +309,28 @@ pub fn run_worker(
             None,
         ) {
             Ok(b) => {
-                log::info!(
-                    "Using cached branch {}",
-                    silver_platter::vcs::full_branch_url(&b)
-                );
+                let display = silver_platter::vcs::full_branch_url(&b);
+                let sanitised = sanitise_url_for_log(&display);
+                log::info!("Using cached branch {}", sanitised);
                 Some(b)
             }
             Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
-                log::info!("Cached branch URL {} missing: {}", url, description);
+                log::info!(
+                    "Cached branch URL {} missing: {}",
+                    sanitise_url_for_log(&url),
+                    description
+                );
                 None
             }
             Err(
                 silver_platter::vcs::BranchOpenError::Unavailable { url, description }
                 | silver_platter::vcs::BranchOpenError::TemporarilyUnavailable { url, description },
             ) => {
-                log::info!("Cached branch URL {} unavailable: {}", url, description);
+                log::info!(
+                    "Cached branch URL {} unavailable: {}",
+                    sanitise_url_for_log(&url),
+                    description
+                );
                 None
             }
             Err(
@@ -318,7 +338,10 @@ pub fn run_worker(
                 | silver_platter::vcs::BranchOpenError::Other(..)
                 | silver_platter::vcs::BranchOpenError::RateLimited { .. },
             ) => {
-                log::info!("Error accessing cached branch URL {}", cached_branch_url);
+                log::info!(
+                    "Error accessing cached branch URL {}",
+                    sanitise_url_for_log(cached_branch_url)
+                );
                 None
             }
         }
@@ -327,7 +350,10 @@ pub fn run_worker(
     };
 
     let resume_branch = if let Some(resume_branch_url) = resume_branch_url {
-        log::info!("Using resume branch: {}", resume_branch_url);
+        log::info!(
+            "Using resume branch: {}",
+            sanitise_url_for_log(resume_branch_url)
+        );
         let probers =
             silver_platter::probers::select_probers(vcs_type.map(|v| v.to_string()).as_deref());
         match silver_platter::vcs::open_branch(
@@ -346,9 +372,10 @@ pub fn run_worker(
                 url,
                 description,
             }) => {
+                let display = sanitise_url_for_log(&url);
                 log::info!(
                     "Resume branch URL {} temporarily unavailable: {}",
-                    url,
+                    display,
                     description
                 );
                 return Err(WorkerFailure {
@@ -357,7 +384,7 @@ pub fn run_worker(
                     stage: vec!["setup".to_owned()],
                     transient: Some(true),
                     details: Some(serde_json::json!({
-                        "url": url,
+                        "url": display,
                     })),
                 });
             }
@@ -366,39 +393,46 @@ pub fn run_worker(
                 description,
                 retry_after,
             }) => {
-                log::info!("Resume branch URL {} rate limited: {}", url, description);
+                let display = sanitise_url_for_log(&url);
+                log::info!(
+                    "Resume branch URL {} rate limited: {}",
+                    display,
+                    description
+                );
                 return Err(WorkerFailure {
                     code: "worker-resume-branch-rate-limited".to_owned(),
                     description,
                     stage: vec!["setup".to_owned()],
                     transient: Some(true),
                     details: Some(serde_json::json!({
-                        "url": url,
+                        "url": display,
                         "retry_after": retry_after,
                     })),
                 });
             }
             Err(silver_platter::vcs::BranchOpenError::Unavailable { url, description }) => {
-                log::info!("Resume branch URL {} unavailable: {}", url, description);
+                let display = sanitise_url_for_log(&url);
+                log::info!("Resume branch URL {} unavailable: {}", display, description);
                 return Err(WorkerFailure {
                     code: "worker-resume-branch-unavailable".to_owned(),
                     description,
                     stage: vec!["setup".to_owned()],
                     transient: Some(false),
                     details: Some(serde_json::json!({
-                        "url": url
+                        "url": display
                     })),
                 });
             }
             Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
-                log::info!("Resume branch URL {} missing: {}", url, description);
+                let display = sanitise_url_for_log(&url);
+                log::info!("Resume branch URL {} missing: {}", display, description);
                 return Err(WorkerFailure {
                     code: "worker-resume-branch-missing".to_owned(),
                     description,
                     stage: vec!["setup".to_owned()],
                     transient: Some(false),
                     details: Some(serde_json::json!({
-                        "url": url
+                        "url": display
                     })),
                 });
             }
@@ -833,7 +867,10 @@ pub fn run_worker(
         details: target_details,
     });
 
-    log::info!("Pushing result branch to {}", target_repo_url);
+    log::info!(
+        "Pushing result branch to {}",
+        sanitise_url_for_log(target_repo_url)
+    );
 
     match vcs_type {
         VcsType::Git => &crate::vcs::GitVcs as &dyn crate::vcs::Vcs,
@@ -1001,6 +1038,31 @@ pub async fn process_single_item(
 
     let output_directory_ = output_directory.path().to_path_buf();
 
+    // Embed the worker's Basic-auth credentials into the
+    // target_repository URL so the push subprocess (breezy/dulwich)
+    // authenticates against git-store's public listener. The runner
+    // only knows the bare URL; only the worker has its own creds, so
+    // splicing them in here keeps creds in one place
+    // (WORKER_NAME/WORKER_PASSWORD on the worker) instead of leaking
+    // them into the runner-side config. No-op for `Credentials::None`,
+    // so in-cluster setups using cluster-internal URLs without auth
+    // still work.
+    let target_repo_url_with_creds = client
+        .credentials()
+        .embed_in_url(&assignment.target_repository.url);
+    // The cached_url and resume_branch_url usually point at the same
+    // git-store as target_repository (the runner derives them from
+    // the same `public_vcs_location`), so they need the same Basic
+    // auth. Splice creds into both.
+    let cached_branch_url_with_creds = assignment
+        .branch
+        .cached_url
+        .as_ref()
+        .map(|u| client.credentials().embed_in_url(u));
+    let resume_branch_url_with_creds = resume_branch_url
+        .as_ref()
+        .map(|u| client.credentials().embed_in_url(u));
+
     let metadata = tokio::task::spawn_blocking(move || {
         let mut metadata = Metadata {
             queue_id: Some(assignment.queue_id),
@@ -1026,13 +1088,13 @@ pub async fn process_single_item(
                 .collect::<Vec<_>>(),
             output_directory_.as_path(),
             &mut metadata,
-            &assignment.target_repository.url,
+            &target_repo_url_with_creds,
             &vendor,
             &assignment_.build.target,
             Some(assignment_.branch.vcs_type),
             assignment_.branch.subpath.as_ref(),
-            resume_branch_url.as_ref(),
-            assignment.branch.cached_url.as_ref(),
+            resume_branch_url_with_creds.as_ref(),
+            cached_branch_url_with_creds.as_ref(),
             resume_result.as_ref(),
             resume_branches.as_ref().map(|x| {
                 {
@@ -1218,6 +1280,41 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::str::FromStr;
     use test_log::test;
+
+    /// Regression for worker credential leaks. The cache push and
+    /// branch-open log lines used to print URLs with embedded
+    /// HTTP-basic creds (e.g. `http://frigg:<pass>@.../git/foo`)
+    /// because `Credentials::embed_in_url` rewrites the userinfo
+    /// component and the worker handed that URL straight to
+    /// `log::info!` / `log::warn!`. The cache endpoint is public,
+    /// so the userinfo must be stripped before any URL reaches
+    /// the journal.
+    #[test]
+    fn test_sanitise_url_for_log_drops_userinfo() {
+        let with_creds: Url = "http://frigg:secret-token@janitor.local/git/imath"
+            .parse()
+            .unwrap();
+        let cleaned = sanitise_url_for_log(&with_creds);
+        let s = cleaned.to_string();
+        assert!(!s.contains("frigg"), "username must be stripped: {}", s);
+        assert!(
+            !s.contains("secret-token"),
+            "password must be stripped: {}",
+            s
+        );
+        assert_eq!(s, "http://janitor.local/git/imath");
+    }
+
+    #[test]
+    fn test_sanitise_url_for_log_passes_through_clean_urls() {
+        // URLs that never had userinfo must be returned as-is so we
+        // don't accidentally rewrite them (path/query preserved).
+        let clean: Url = "https://salsa.debian.org/jelmer/foo.git?branch=master"
+            .parse()
+            .unwrap();
+        let cleaned = sanitise_url_for_log(&clean);
+        assert_eq!(cleaned.as_str(), clean.as_str());
+    }
 
     #[test]
     fn test_derive_branch_name() {

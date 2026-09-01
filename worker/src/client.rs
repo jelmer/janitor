@@ -66,7 +66,7 @@ pub async fn get_assignment_raw(
     } else {
         serde_json::json![null]
     };
-    if let Some(url) = jenkins_build_url.or_else(|| my_url) {
+    if let Some(url) = jenkins_build_url.or(my_url) {
         json["worker_link"] = serde_json::Value::String(url.to_string());
     }
     async fn send_assignment_request(
@@ -212,17 +212,53 @@ impl Credentials {
         }
         credentials
     }
+
+    /// Return a copy of `url` with the worker's Basic-auth credentials
+    /// embedded as `userinfo`, so transports that take URLs as their
+    /// only auth-bearing parameter (notably breezy/dulwich's HTTP git
+    /// push, which doesn't read our `reqwest` client) still talk to
+    /// the same authenticated endpoint we use for `/assign` and
+    /// `/finish`. For `Credentials::None` or `Credentials::Bearer`
+    /// the URL is returned unchanged; bearer-token push isn't a
+    /// thing on the wire this targets.
+    pub fn embed_in_url(&self, url: &Url) -> Url {
+        if let Credentials::Basic { username, password } = self {
+            let mut out = url.clone();
+            // `set_username`/`set_password` only fail when the URL
+            // cannot have a userinfo component (cannot-be-a-base
+            // URLs like `data:` or `mailto:`); for the http(s) URLs
+            // workers actually push to this is unreachable. Leave
+            // the URL untouched if we somehow hit one.
+            if out.set_username(username).is_ok() {
+                let _ = out.set_password(password.as_deref());
+            }
+            out
+        } else {
+            url.clone()
+        }
+    }
 }
 
 impl Client {
-    pub fn new(base_url: Url, credentials: Credentials, user_agent: &str) -> Self {
+    pub fn new(
+        base_url: Url,
+        credentials: Credentials,
+        user_agent: &str,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut builder = reqwest::Client::builder();
         builder = builder.user_agent(user_agent);
-        Self {
-            client: builder.build().unwrap(),
+        let client = builder
+            .build()
+            .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        Ok(Self {
+            client,
             base_url,
             credentials,
-        }
+        })
+    }
+
+    pub fn credentials(&self) -> &Credentials {
+        &self.credentials
     }
 
     pub async fn get_assignment(
