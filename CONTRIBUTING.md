@@ -119,3 +119,22 @@ for reviewers.
 
 In general, changes should be preceded by a discussion in an issue.
 PRs or commits should reference the issue they are addressing.
+
+## Developer Certificate of Origin
+
+Contributions to the Janitor are accepted under the terms of the
+[Developer Certificate of Origin](DCO) (DCO) version 1.1. By signing off
+your commits, you certify that you have the right to submit the
+contribution under the project's open source license.
+
+To sign off a commit, add a `Signed-off-by` trailer with your real name
+and email address:
+
+```
+Signed-off-by: Jane Developer <jane@example.com>
+```
+
+`git commit -s` (or `--signoff`) adds this trailer automatically using
+the name and email from your git configuration. Every commit in a pull
+request must be signed off.
+
