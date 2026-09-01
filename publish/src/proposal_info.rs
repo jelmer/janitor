@@ -40,9 +40,12 @@ impl ProposalInfoManager {
         &self,
         duration: chrono::Duration,
     ) -> Result<Vec<url::Url>, sqlx::Error> {
-        let query = format!(
-                "SELECT url FROM merge_proposal WHERE last_scanned is NULL OR now() - last_scanned > interval '{} days'", duration.num_days());
-        let urls: Vec<String> = sqlx::query_scalar(&query).fetch_all(&self.conn).await?;
+        let urls: Vec<String> = sqlx::query_scalar(
+            "SELECT url FROM merge_proposal WHERE last_scanned IS NULL OR now() - last_scanned > $1 * interval '1 day'",
+        )
+        .bind(duration.num_days())
+        .fetch_all(&self.conn)
+        .await?;
 
         Ok(urls.iter().map(|url| url.parse().unwrap()).collect())
     }

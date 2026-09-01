@@ -67,9 +67,9 @@ google-cloud-gax = "1.4.0"
 bytes = "1"
 tempfile = "3"
 redis = { version = "1", features = ["aio", "connection-manager", "tokio-comp"] }
-sqlx = { version = "^0.8", features = ["chrono", "derive", "macros", "migrate", "postgres", "runtime-async-std-native-tls"] }
-sqlx-postgres = { version = "^0.8", features = ["chrono", "time"] }
-sqlx-core = { version = "^0.8", features = ["chrono"] }
+sqlx = { version = "0.9", features = ["chrono", "derive", "macros", "migrate", "postgres", "runtime-async-std", "tls-native-tls"] }
+sqlx-postgres = { version = "0.9", features = ["chrono", "time"] }
+sqlx-core = { version = "0.9", features = ["chrono"] }
 pyo3 = { version = "0.28" }
 reqwest = { version = "0.13", features = ["blocking"] }
 pyo3-log = "0.13"
@@ -115,4 +115,4 @@ default = ["gcp", "gcs", "debian"]
 debian = ["dep:debversion"]
 gcp = ["stackdriver_logger", "gcs"]
 gcs = ["dep:google-cloud-storage", "dep:google-cloud-auth", "dep:google-cloud-gax", "dep:bytes"]
-testing = ["sqlx/postgres", "sqlx/runtime-tokio-rustls"]
+testing = ["sqlx/postgres", "sqlx/runtime-tokio", "sqlx/tls-rustls"]

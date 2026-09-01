@@ -99,7 +99,13 @@ pub(crate) fn build(
                     update_changelog == crate::debian::DebUpdateChangelog::Update,
                     Some(Box::new(breezyshim::commit::NullCommitReporter::new())),
                 );
-                let fixers = ognibuild::debian::fixers::default_fixers(&packaging_context, &apt);
+                let fixers = ognibuild::debian::fixers::default_fixers(&packaging_context, &apt)
+                    .map_err(|e| BuildFailure {
+                        code: "fixers-unavailable".to_string(),
+                        description: e.to_string(),
+                        details: None,
+                        stage: vec!["build".to_string()],
+                    })?;
 
                 ognibuild::debian::fix_build::build_incrementally(
                     local_tree,

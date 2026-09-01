@@ -231,7 +231,7 @@ pub struct PoolStats {
 impl Database {
     /// Execute a simple count query without parameters
     pub async fn count_simple(&self, query: &str) -> Result<i64, DatabaseError> {
-        let count = sqlx::query_scalar::<_, i64>(query)
+        let count = sqlx::query_scalar::<_, i64>(sqlx::AssertSqlSafe(query))
             .fetch_one(&self.pool)
             .await?;
         Ok(count)

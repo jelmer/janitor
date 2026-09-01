@@ -14,8 +14,10 @@ RUN apt-get update --yes \
         cargo \
         g++ \
         gcc \
+        libclang-dev \
         libpython3-dev \
         libssl-dev \
+        nettle-dev \
         pkg-config \
         protobuf-compiler \
        ## Extra packages

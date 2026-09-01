@@ -106,7 +106,7 @@ where
 
     // Execute queries concurrently
     let (data_result, count_result) = tokio::try_join!(
-        sqlx::query_as::<_, T>(&paginated_query).fetch_all(pool),
+        sqlx::query_as::<_, T>(sqlx::AssertSqlSafe(paginated_query)).fetch_all(pool),
         execute_count_query_simple(pool, count_query)
     )?;
 
@@ -127,7 +127,9 @@ where
 
 /// Execute count query simplified
 async fn execute_count_query_simple(pool: &PgPool, query: &str) -> Result<u64, sqlx::Error> {
-    let row = sqlx::query(query).fetch_one(pool).await?;
+    let row = sqlx::query(sqlx::AssertSqlSafe(query))
+        .fetch_one(pool)
+        .await?;
     let count: i64 = row.try_get(0)?;
     Ok(count as u64)
 }
@@ -148,7 +150,7 @@ where
         params.sql_offset()
     );
 
-    let data = sqlx::query_as::<_, T>(&paginated_query)
+    let data = sqlx::query_as::<_, T>(sqlx::AssertSqlSafe(paginated_query))
         .fetch_all(pool)
         .await?;
 

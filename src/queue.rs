@@ -143,7 +143,7 @@ impl<'a> Queue<'a> {
 
         query += " ORDER BY queue.bucket ASC, queue.priority ASC, queue.id ASC LIMIT 1";
 
-        let mut query_builder = sqlx::query(&query);
+        let mut query_builder = sqlx::query(sqlx::AssertSqlSafe(query));
 
         if let Some(assigned_queue_items) = assigned_queue_items {
             query_builder =
