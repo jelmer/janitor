@@ -167,13 +167,11 @@ async fn get_artifacts(State(state): State<Arc<RwLock<AppState>>>, headers: Head
     }
 }
 
-async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Option<String> {
-    state
-        .read()
-        .unwrap()
-        .assignment
-        .as_ref()
-        .map(|a| a.id.clone())
+async fn get_log_id(State(state): State<Arc<RwLock<AppState>>>) -> Response {
+    match state.read().unwrap().assignment.as_ref() {
+        Some(a) => a.id.clone().into_response(),
+        None => (StatusCode::NOT_FOUND, "no run in progress").into_response(),
+    }
 }
 
 async fn get_log_file(
@@ -835,10 +833,10 @@ mod tests {
             .body(Body::empty())
             .unwrap();
         let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), 200);
+        assert_eq!(response.status(), 404);
 
         let body = get_body(response).await;
-        assert_eq!(body, "null");
+        assert_eq!(body, "no run in progress");
 
         if let Ok(mut state) = state.write() {
             state.assignment = Some(Assignment {
@@ -882,7 +880,7 @@ mod tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), 200);
 
-        let body: String = serde_json::from_str(&get_body(response).await).unwrap();
+        let body = get_body(response).await;
         assert_eq!(body, "test");
     }
 }
