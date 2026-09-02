@@ -31,6 +31,7 @@ from janitor.site import (
     worker_link_is_global,
 )
 from janitor.site.cupboard import create_app
+from janitor.site.cupboard.api import create_app as create_api_app
 
 
 @web.middleware
@@ -40,6 +41,15 @@ async def dummy_user_middleware(request, handler):
     return resp
 
 
+def _user_middleware(user):
+    @web.middleware
+    async def middleware(request, handler):
+        request["user"] = user
+        return await handler(request)
+
+    return middleware
+
+
 async def create_client(aiohttp_client, db):
     config = read_config_string("")
     app = create_app(
@@ -47,6 +57,13 @@ async def create_client(aiohttp_client, db):
     )
     app["external_url"] = URL("http://example.com/")
     app.middlewares.insert(0, dummy_user_middleware)
+    return await aiohttp_client(app)
+
+
+async def create_api_client(aiohttp_client, db, *, user):
+    config = read_config_string("oauth2_provider {}\n")
+    app = create_api_app(config=config, publisher_url=None, runner_url=None, db=db)
+    app.middlewares.insert(0, _user_middleware(user))
     return await aiohttp_client(app)
 
 
@@ -297,4 +314,140 @@ async def test_run_redirect(aiohttp_client, db):
 async def test_run_redirect_unknown_run_returns_404(aiohttp_client, db):
     client = await create_client(aiohttp_client, db)
     resp = await client.get("/cupboard/run/nonexistent/", allow_redirects=False)
+    assert resp.status == 404
+
+
+ADMIN_USER = {"email": "admin@example.com", "groups": []}
+
+
+async def test_workers_list_requires_admin(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=None)
+    resp = await client.get("/workers")
+    assert resp.status == 401
+
+
+async def test_workers_list_empty(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    resp = await client.get("/workers")
+    assert resp.status == 200
+    assert await resp.json() == []
+
+
+async def test_workers_list(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    async with db.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO worker (name, password, link) VALUES "
+            "($1, 'x', $2), ($3, 'x', $4)",
+            "alice",
+            "https://public.example.com/",
+            "bob",
+            "http://10.0.0.1/",
+        )
+    resp = await client.get("/workers")
+    assert resp.status == 200
+    body = await resp.json()
+    assert body == [
+        {"name": "alice", "link": "https://public.example.com/", "run_count": 0},
+        {"name": "bob", "link": None, "run_count": 0},
+    ]
+
+
+async def test_workers_list_counts_runs(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    async with db.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO worker (name, password) VALUES ($1, 'x')", "alice"
+        )
+        await _insert_codebase(conn, "foo")
+        now = datetime.utcnow()
+        await _insert_run(
+            conn,
+            run_id="r1",
+            codebase="foo",
+            start_time=now - timedelta(hours=1),
+            finish_time=now,
+        )
+        await conn.execute("UPDATE run SET worker = 'alice' WHERE id = 'r1'")
+
+    resp = await client.get("/workers")
+    assert resp.status == 200
+    assert await resp.json() == [{"name": "alice", "link": None, "run_count": 1}]
+
+
+async def test_workers_add_requires_admin(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=None)
+    resp = await client.post("/workers", data={"name": "alice"})
+    assert resp.status == 401
+
+
+async def test_workers_add_requires_name(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    resp = await client.post("/workers", data={})
+    assert resp.status == 400
+
+
+async def test_workers_add(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    resp = await client.post(
+        "/workers", data={"name": "alice", "link": "https://alice.example.com/"}
+    )
+    assert resp.status == 201
+    body = await resp.json()
+    assert body["name"] == "alice"
+    assert body["link"] == "https://alice.example.com/"
+    assert isinstance(body["password"], str) and body["password"]
+
+    async with db.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT name, link, password FROM worker WHERE name = 'alice'"
+        )
+    assert row["name"] == "alice"
+    assert row["link"] == "https://alice.example.com/"
+    # password is stored hashed, not in plaintext
+    assert row["password"] != body["password"]
+
+
+async def test_workers_add_without_link(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    resp = await client.post("/workers", data={"name": "alice"})
+    assert resp.status == 201
+    body = await resp.json()
+    assert body["link"] is None
+
+    async with db.acquire() as conn:
+        row = await conn.fetchrow("SELECT link FROM worker WHERE name = 'alice'")
+    assert row["link"] is None
+
+
+async def test_workers_add_duplicate(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    async with db.acquire() as conn:
+        await conn.execute("INSERT INTO worker (name, password) VALUES ('alice', 'x')")
+    resp = await client.post("/workers", data={"name": "alice"})
+    assert resp.status == 409
+
+
+async def test_workers_delete_requires_admin(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=None)
+    resp = await client.delete("/workers/alice")
+    assert resp.status == 401
+
+
+async def test_workers_delete(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    async with db.acquire() as conn:
+        await conn.execute("INSERT INTO worker (name, password) VALUES ('alice', 'x')")
+    resp = await client.delete("/workers/alice")
+    assert resp.status == 200
+    assert await resp.json() == {"name": "alice"}
+
+    async with db.acquire() as conn:
+        count = await conn.fetchval("SELECT count(*) FROM worker WHERE name = 'alice'")
+    assert count == 0
+
+
+async def test_workers_delete_unknown(aiohttp_client, db):
+    client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
+    resp = await client.delete("/workers/nonexistent")
     assert resp.status == 404
