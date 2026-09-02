@@ -282,8 +282,15 @@ fn build(
         Err(BsError::Unimplemented) => {
             return Err(WorkerFailure {
                 code: "build-action-unimplemented".to_string(),
-                description: "The build action is not implemented for the buildsystem".to_string(),
-                details: None,
+                description: format!(
+                    "The build action is not implemented for the detected buildsystem(s): {:?}",
+                    bss.iter().map(|bs| bs.name()).collect::<Vec<_>>()
+                ),
+                details: Some(serde_json::json!({
+                    "detected_buildsystems": bss.iter().map(|bs| bs.name()).collect::<Vec<_>>(),
+                    "project_path": project.external_path(),
+                    "suggestion": "This build system may need additional implementation in ognibuild"
+                })),
                 stage: vec!["build".to_string()],
                 transient: None,
             });
@@ -333,7 +340,7 @@ fn build(
                 code: "missing-command".to_string(),
                 description: format!("Missing command: {}", command),
                 details: None,
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
@@ -352,7 +359,7 @@ fn build(
                 details: Some(serde_json::json!({
                     "retcode": retcode,
                 })),
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
@@ -363,7 +370,7 @@ fn build(
                 details: Some(serde_json::json!({
                     "retcode": retcode,
                 })),
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
@@ -372,7 +379,7 @@ fn build(
                 code: "no-build-system-detected".to_string(),
                 description: "No build system detected".to_string(),
                 details: None,
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
@@ -381,25 +388,24 @@ fn build(
                 code: "dependency-install-error".to_string(),
                 description: format!("Dependency install error: {}", err),
                 details: None,
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
         Err(BsError::Unimplemented) => {
-            return Err(WorkerFailure {
-                code: "build-action-unimplemented".to_string(),
-                description: "The build action is not implemented for the buildsystem".to_string(),
-                details: None,
-                stage: vec!["build".to_string()],
-                transient: None,
-            });
+            log::warn!(
+                "Test action not implemented for buildsystem(s): {:?}, but build succeeded",
+                bss.iter().map(|bs| bs.name()).collect::<Vec<_>>()
+            );
+            // For tests, we don't fail the entire build if tests aren't implemented
+            // This is different from build actions which are essential
         }
         Err(BsError::Error(AnalyzedError::IoError(e))) | Err(BsError::IoError(e)) => {
             return Err(WorkerFailure {
                 code: "io-error".to_string(),
                 description: format!("IO error: {}", e),
                 details: None,
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
@@ -408,7 +414,7 @@ fn build(
                 code: "unknown-error".to_string(),
                 description: format!("Unknown error: {}", e),
                 details: None,
-                stage: vec!["build".to_string()],
+                stage: vec!["test".to_string()],
                 transient: None,
             });
         }
