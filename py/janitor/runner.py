@@ -2508,6 +2508,21 @@ class QueueRateLimiting(Exception):
         self.retry_after = retry_after
 
 
+def _default_target_repository_url(queue_processor, vcs_type, codebase):
+    """Fall back to the DEFAULT_VCS_TYPE git_store, if configured."""
+    default_manager = queue_processor.public_vcs_managers.get(DEFAULT_VCS_TYPE)
+    if default_manager is None:
+        logging.warning(
+            "No vcs manager configured for %s or default %s; omitting "
+            "target_repository_url for %s",
+            vcs_type,
+            DEFAULT_VCS_TYPE,
+            codebase,
+        )
+        return None
+    return default_manager.get_repository_url(codebase)
+
+
 async def next_item(
     queue_processor,
     config,
@@ -2633,14 +2648,14 @@ async def next_item(
                 additional_colocated_branches = None
                 # The branch never actually opened, so there is nothing to
                 # autodetect from here - the worker retries the open itself
-                # and does its own detection then. This is only a stand-in
-                # for target_repository/metadata purposes in the meantime.
-                vcs_type = vcs_info.get("vcs_type") or DEFAULT_VCS_TYPE
+                # and does its own detection then. Keep whatever was last
+                # known (possibly None); don't assume git.
+                vcs_type = vcs_info.get("vcs_type")
             except asyncio.TimeoutError:
                 logging.debug("Timeout opening branch %s", vcs_info["branch_url"])
                 resume_branch = None
                 additional_colocated_branches = None
-                vcs_type = vcs_info.get("vcs_type") or DEFAULT_VCS_TYPE
+                vcs_type = vcs_info.get("vcs_type")
             else:
                 # We try the public branch first, since perhaps a maintainer
                 # has made changes to the branch there.
@@ -2674,7 +2689,9 @@ async def next_item(
                 else:
                     resume_branch = None
         else:
-            vcs_type = vcs_info.get("vcs_type") or DEFAULT_VCS_TYPE
+            # No branch URL means the codebase isn't versioned; don't assume
+            # git.
+            vcs_type = vcs_info.get("vcs_type")
             resume_branch = None
             additional_colocated_branches = None
 
@@ -2753,9 +2770,9 @@ async def next_item(
                 cached_branch_url = None
                 # Results get pushed to git_store regardless of whether
                 # the source vcs_type resolved, so fall back instead of None.
-                target_repository_url = queue_processor.public_vcs_managers[
-                    DEFAULT_VCS_TYPE
-                ].get_repository_url(item.codebase)
+                target_repository_url = _default_target_repository_url(
+                    queue_processor, vcs_type, item.codebase
+                )
             else:
                 cached_branch_url = vcs_manager.get_branch_url(
                     item.codebase, branch_name
@@ -2763,9 +2780,23 @@ async def next_item(
                 target_repository_url = vcs_manager.get_repository_url(item.codebase)
     except UnsupportedVcs:
         cached_branch_url = None
-        target_repository_url = queue_processor.public_vcs_managers[
-            DEFAULT_VCS_TYPE
-        ].get_repository_url(item.codebase)
+        target_repository_url = _default_target_repository_url(
+            queue_processor, vcs_type, item.codebase
+        )
+
+    if target_repository_url is None:
+        # target_repository.url is a required field worker-side (Url, not
+        # Option<Url>) - there is truly nothing left to fall back to here,
+        # so fail this run clearly instead of shipping a payload the worker
+        # can't even deserialize.
+        await abort(
+            active_run, "no-vcs-manager", "No vcs manager configured for codebase."
+        )
+        raise RuntimeError(
+            f"No vcs manager configured for {item.codebase} "
+            f"(vcs_type={vcs_type!r}) and no default ({DEFAULT_VCS_TYPE!r}) "
+            "manager configured either."
+        )
 
     env: dict[str, str] = {}
     env.update(build_env)
@@ -2783,7 +2814,9 @@ async def next_item(
             "default-empty": campaign_config.default_empty,
             "url": vcs_info.get("branch_url"),
             "subpath": vcs_info.get("subpath"),
-            "vcs_type": vcs_type,
+            # branch.vcs_type is a required field on the worker side, so it
+            # needs a concrete value even when vcs_type couldn't be resolved.
+            "vcs_type": vcs_type or DEFAULT_VCS_TYPE,
             "cached_url": cached_branch_url,
             # normalize to a list - the worker requires Vec<String>, not a dict
             "additional_colocated_branches": (
