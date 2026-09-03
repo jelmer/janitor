@@ -45,11 +45,63 @@ pub mod web;
 
 mod tee;
 
+/// Result codes that mean a host rate limited this worker specifically,
+/// as opposed to some other branch-open failure. Kept in sync with the
+/// codes convert_branch_exception() in src/vcs.rs can produce.
+const RATE_LIMITED_RESULT_CODES: [&str; 2] =
+    ["too-many-requests", "worker-resume-branch-rate-limited"];
+
+/// How long to exclude a host after a rate-limited result with no
+/// retry_after of its own.
+const DEFAULT_RATE_LIMIT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[derive(Clone, Default)]
 pub struct AppState {
     pub output_directory: Option<std::path::PathBuf>,
     pub assignment: Option<janitor::api::worker::Assignment>,
     pub metadata: Option<Metadata>,
+    /// Hosts this worker has itself seen a 429/503 from, and until when to
+    /// keep asking the runner to exclude them from this worker's own
+    /// assignment requests. Per-process only: does not need to survive a
+    /// worker restart, and is never reported to the runner directly.
+    pub rate_limited_hosts: HashMap<String, std::time::Instant>,
+}
+
+impl AppState {
+    /// Record that `host` rate limited this worker just now, so it gets
+    /// excluded from this worker's own future assignment requests until
+    /// `retry_after` elapses (or DEFAULT_RATE_LIMIT_BACKOFF if not given).
+    pub fn record_rate_limited_host(
+        &mut self,
+        host: String,
+        retry_after: Option<std::time::Duration>,
+    ) {
+        let until = std::time::Instant::now() + retry_after.unwrap_or(DEFAULT_RATE_LIMIT_BACKOFF);
+        self.rate_limited_hosts.insert(host, until);
+    }
+
+    /// Hosts to exclude from the next assignment request: everything
+    /// recorded above whose backoff hasn't expired yet. Expired entries are
+    /// dropped.
+    pub fn active_rate_limited_hosts(&mut self) -> Vec<String> {
+        let now = std::time::Instant::now();
+        self.rate_limited_hosts.retain(|_, until| *until > now);
+        self.rate_limited_hosts.keys().cloned().collect()
+    }
+}
+
+/// Pull a retry_after out of a WorkerFailure's `details`, as reported by
+/// convert_branch_exception() (a whole number of seconds) or
+/// silver_platter::vcs::BranchOpenError::RateLimited (fractional seconds).
+/// A missing, zero, or negative value means "no explicit retry_after".
+fn retry_after_from_failure_details(
+    details: Option<&serde_json::Value>,
+) -> Option<std::time::Duration> {
+    details
+        .and_then(|d| d.get("retry_after"))
+        .and_then(|v| v.as_f64())
+        .filter(|secs| *secs > 0.0)
+        .map(std::time::Duration::from_secs_f64)
 }
 
 pub async fn is_gce_instance() -> bool {
@@ -250,7 +302,7 @@ pub fn run_worker(
                     code: code.clone(),
                     description,
                     stage: vec!["setup".to_owned()],
-                    transient: Some(code.contains("temporarily")),
+                    transient: Some(code.contains("temporarily") || code == "too-many-requests"),
                     details: Some(serde_json::json!({
                         "url": main_branch_url,
                         "retry_after": retry_after.map(|r| r.num_seconds()),
@@ -983,8 +1035,16 @@ pub async fn process_single_item(
     output_directory_base: Option<&std::path::Path>,
     state: std::sync::Arc<std::sync::RwLock<AppState>>,
 ) -> Result<(), SingleItemError> {
+    let exclude_hosts = state.write().unwrap().active_rate_limited_hosts();
     let assignment = client
-        .get_assignment(my_url, node_name, jenkins_build_url, codebase, campaign)
+        .get_assignment(
+            my_url,
+            node_name,
+            jenkins_build_url,
+            codebase,
+            campaign,
+            &exclude_hosts,
+        )
         .await?;
 
     state.write().unwrap().assignment = Some(assignment.clone());
@@ -1147,6 +1207,24 @@ pub async fn process_single_item(
     })
     .await
     .map_err(|e| SingleItemError::JobPanicked(e.to_string()))?;
+
+    if let Some(code) = metadata.code.as_deref() {
+        if RATE_LIMITED_RESULT_CODES.contains(&code) {
+            if let Some(host) = metadata.branch_url.as_ref().and_then(|u| u.host_str()) {
+                let retry_after =
+                    retry_after_from_failure_details(metadata.failure_details.as_ref());
+                log::info!(
+                    "Rate limited by {} ({}); excluding it from this worker's own assignment requests",
+                    host,
+                    code
+                );
+                state
+                    .write()
+                    .unwrap()
+                    .record_rate_limited_host(host.to_string(), retry_after);
+            }
+        }
+    }
 
     let result = client
         .upload_results(&assignment.id, &metadata, Some(output_directory.path()))
@@ -1364,6 +1442,71 @@ mod tests {
                 details: None,
                 transient: None,
             }
+        );
+    }
+
+    #[test]
+    fn test_app_state_rate_limited_hosts() {
+        let mut state = AppState::default();
+        assert_eq!(state.active_rate_limited_hosts(), Vec::<String>::new());
+
+        state.record_rate_limited_host(
+            "salsa.debian.org".to_string(),
+            Some(std::time::Duration::from_secs(60)),
+        );
+        assert_eq!(
+            state.active_rate_limited_hosts(),
+            vec!["salsa.debian.org".to_string()]
+        );
+
+        // An already-expired backoff is excluded and dropped.
+        state.record_rate_limited_host(
+            "expired.example".to_string(),
+            Some(std::time::Duration::from_secs(0)),
+        );
+        assert_eq!(
+            state.active_rate_limited_hosts(),
+            vec!["salsa.debian.org".to_string()]
+        );
+        assert!(!state.rate_limited_hosts.contains_key("expired.example"));
+    }
+
+    #[test]
+    fn test_app_state_record_rate_limited_host_defaults_backoff() {
+        let mut state = AppState::default();
+        state.record_rate_limited_host("example.com".to_string(), None);
+        assert_eq!(
+            state.active_rate_limited_hosts(),
+            vec!["example.com".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_retry_after_from_failure_details() {
+        // convert_branch_exception()'s style: a whole number of seconds.
+        assert_eq!(
+            retry_after_from_failure_details(Some(&serde_json::json!({"retry_after": 30}))),
+            Some(std::time::Duration::from_secs(30))
+        );
+        // silver_platter's RateLimited style: fractional seconds.
+        assert_eq!(
+            retry_after_from_failure_details(Some(&serde_json::json!({"retry_after": 30.5}))),
+            Some(std::time::Duration::from_secs_f64(30.5))
+        );
+        // No retry_after, no details, and a non-positive retry_after all
+        // mean "fall back to the caller's default".
+        assert_eq!(
+            retry_after_from_failure_details(Some(&serde_json::json!({"url": "x"}))),
+            None
+        );
+        assert_eq!(retry_after_from_failure_details(None), None);
+        assert_eq!(
+            retry_after_from_failure_details(Some(&serde_json::json!({"retry_after": 0}))),
+            None
+        );
+        assert_eq!(
+            retry_after_from_failure_details(Some(&serde_json::json!({"retry_after": -5}))),
+            None
         );
     }
 
