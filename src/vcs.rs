@@ -728,11 +728,8 @@ impl VcsManager for LocalGitVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        let _ = std::fs::create_dir_all(&self.base_path);
-        let base_path = self
-            .base_path
-            .canonicalize()
-            .unwrap_or_else(|_| self.base_path.clone());
+        std::fs::create_dir_all(&self.base_path).unwrap();
+        let base_path = self.base_path.canonicalize().unwrap();
         Url::from_directory_path(base_path)
             .unwrap()
             .join(codebase)
@@ -897,11 +894,8 @@ impl VcsManager for LocalBzrVcsManager {
     }
 
     fn get_repository_url(&self, codebase: &str) -> Url {
-        let _ = std::fs::create_dir_all(&self.base_path);
-        let base_path = self
-            .base_path
-            .canonicalize()
-            .unwrap_or_else(|_| self.base_path.clone());
+        std::fs::create_dir_all(&self.base_path).unwrap();
+        let base_path = self.base_path.canonicalize().unwrap();
         Url::from_directory_path(base_path)
             .unwrap()
             .join(codebase)
