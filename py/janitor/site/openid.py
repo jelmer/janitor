@@ -97,10 +97,12 @@ async def handle_oauth_callback(request):
         refresh_token = resp["refresh_token"]  # noqa: F841
         access_token = resp["access_token"]
 
-    try:
-        back_url = request.cookies["back_url"]
-    except KeyError:
-        back_url = "/"
+    back_url = "/"
+    raw_back_url = request.cookies.get("back_url")
+    if raw_back_url is not None:
+        target = _sanitize_redirect(raw_back_url)
+        if target is not None:
+            back_url = target
 
     async with request.app["http_client_session"].get(
         request.app["openid_config"]["userinfo_endpoint"],

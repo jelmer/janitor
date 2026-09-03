@@ -331,6 +331,36 @@ async def test_oauth_callback_clears_state_cookie_with_matching_path(
     assert "Path=/oauth/callback" in state_deletion
 
 
+async def test_oauth_callback_rejects_unsafe_back_url_cookie(aiohttp_client, db):
+    # back_url is set by handle_login after sanitizing it, but it's a
+    # regular cookie - nothing stops a request from arriving here with
+    # that cookie set directly, bypassing handle_login's check entirely.
+    provider_client = await _create_oauth_provider(
+        aiohttp_client,
+        token_response={
+            "token_type": "Bearer",
+            "access_token": "the-access-token",
+            "refresh_token": "the-refresh-token",
+        },
+        userinfo_response={"email": "alice@example.com"},
+    )
+    app = await _build_app(db)
+    app["openid_config"] = {
+        "token_endpoint": str(provider_client.make_url("/token")),
+        "userinfo_endpoint": str(provider_client.make_url("/userinfo")),
+    }
+    client = await aiohttp_client(app)
+
+    resp = await client.get(
+        "/oauth/callback",
+        params={"code": "authcode", "state": "mystate"},
+        cookies={"state": "mystate", "back_url": "//evil.example"},
+        allow_redirects=False,
+    )
+    assert resp.status == 302
+    assert resp.headers["Location"] == "/"
+
+
 async def test_oauth_callback_state_mismatch_returns_400(aiohttp_client, db):
     app = await _build_app(db)
     app["openid_config"] = {
