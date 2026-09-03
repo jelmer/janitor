@@ -50,17 +50,17 @@ SELECT
   codebase.name AS codebase,
   codebase.branch_url AS branch_url,
   candidate.suite AS campaign,
-  candidate.context AS context,
-  candidate.value AS value,
-  candidate.success_chance AS success_chance,
-  array_agg(named_publish_policy.per_branch_policy.mode) AS publish_modes,
+  coalesce(candidate.context, '') AS context,
+  candidate.value::bigint AS value,
+  coalesce(candidate.success_chance, 1.0) AS success_chance,
+  coalesce(array_agg(branch_publish_policy.mode) FILTER (WHERE branch_publish_policy.mode IS NOT NULL), '{}')::text[] AS publish_modes,
   candidate.command AS command,
   candidate.change_set AS change_set
 FROM candidate
 INNER JOIN codebase on codebase.name = candidate.codebase
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
-INNER JOIN branch_publish_policy ON branch_publish_policy.role = ANY(named_publish_policy.per_branch_policy)
+LEFT JOIN LATERAL unnest(named_publish_policy.per_branch_policy) AS branch_publish_policy ON true
 "###,
     );
     if let Some(codebases) = codebases {
@@ -72,6 +72,10 @@ INNER JOIN branch_publish_policy ON branch_publish_policy.role = ANY(named_publi
         query.push(" AND candidate.suite = ");
         query.push_bind(campaign);
     }
+    query.push(
+        " GROUP BY codebase.name, codebase.branch_url, candidate.suite, candidate.context, \
+           candidate.value, candidate.success_chance, candidate.command, candidate.change_set",
+    );
 
     let query = query.build();
 
@@ -427,7 +431,7 @@ pub async fn bulk_add_to_queue(
 ) -> Result<(), Error> {
     let bucket = bucket.unwrap_or("default");
     let mut codebase_values = sqlx::query_as::<_, (String, f64)>(
-        "SELECT name, coalesce(value, 0) FROM codebase WHERE name IS NOT NULL",
+        "SELECT name, coalesce(value, 0)::float8 FROM codebase WHERE name IS NOT NULL",
     )
     .fetch_all(conn)
     .await?
