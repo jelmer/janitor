@@ -300,7 +300,7 @@ WHERE
    result_code LIKE 'autopkgtest-%' OR
    result_code LIKE 'build-%' OR
    result_code LIKE 'dist-%' OR
-   result_code LIKE 'unpack-%s' OR
+   result_code LIKE 'unpack-%' OR
    result_code LIKE 'create-session-%' OR
    result_code LIKE 'missing-%')
 """
