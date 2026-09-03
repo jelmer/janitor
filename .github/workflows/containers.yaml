@@ -7,6 +7,10 @@ name: Containers - Build and push images
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build and Push
@@ -51,23 +55,6 @@ jobs:
             exit 1
           fi
           echo "TAGS=${TAGS}" | tee -a $GITHUB_ENV
-      - name: Build ${{ matrix.dockerfile_suffix }} image
-        id: build-image
-        uses: redhat-actions/buildah-build@v2
-        with:
-          containerfiles: "Dockerfile_${{ matrix.dockerfile_suffix }}"
-          image: |
-            ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
-          tags: ${{ env.TAGS }}
-
-      - name: Test ${{ matrix.dockerfile_suffix }} image
-        run: |
-          set -x
-          tag="$( echo ${{ env.TAGS }} | awk '{print $1}' )"
-          podman run \
-            ghcr.io/${{ github.repository }}/\
-          ${{ matrix.dockerfile_suffix }}:${tag} \
-            --help
 
       - name: Login to GitHub Packages (ghcr.io)
         if: |
@@ -77,6 +64,42 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assemble buildah cache args
+        env:
+          REPO: ${{ github.repository }}
+          SUFFIX: ${{ matrix.dockerfile_suffix }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          CACHE_REPO="ghcr.io/${REPO}/${SUFFIX}-buildcache"
+          {
+            echo "BUILDAH_CACHE_ARGS<<EOF"
+            echo "--cache-from=${CACHE_REPO}"
+            if [ "${EVENT}" != "pull_request" ]; then
+              echo "--cache-to=${CACHE_REPO}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Build ${{ matrix.dockerfile_suffix }} image
+        id: build-image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          containerfiles: "Dockerfile_${{ matrix.dockerfile_suffix }}"
+          image: |
+            ghcr.io/${{ github.repository }}/${{ matrix.dockerfile_suffix }}
+          tags: ${{ env.TAGS }}
+          layers: true
+          extra-args: ${{ env.BUILDAH_CACHE_ARGS }}
+
+      - name: Test ${{ matrix.dockerfile_suffix }} image
+        run: |
+          set -x
+          tag="$( echo ${{ env.TAGS }} | awk '{print $1}' )"
+          podman run \
+            ghcr.io/${{ github.repository }}/\
+          ${{ matrix.dockerfile_suffix }}:${tag} \
+            --help
 
       - name: >
           Push ${{ env.container }} image to
