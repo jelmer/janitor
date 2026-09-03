@@ -699,11 +699,10 @@ async def test_assignment_falls_back_when_resume_branch_forge_needs_login(
     aiohttp_client, db, tmp_path, monkeypatch
 ):
     # Simulate breezy.forge.ForgeLoginRequired coming out of the
-    # find_existing_proposed() call inside open_resume_branch() (this
-    # happens for real when the forge hosting the public branch needs
-    # credentials we don't have just to look up a resume branch). Before the
-    # fix, this exception wasn't caught anywhere on this path and crashed
-    # the whole /active-runs assign request with a 500.
+    # find_existing_proposed() call inside open_resume_branch(), which
+    # happens when the forge hosting the public branch needs credentials
+    # we don't have just to look up a resume branch. The assignment should
+    # still succeed, with no resume branch.
     from breezy.forge import ForgeLoginRequired
 
     def raise_forge_login_required(*args, **kwargs):
