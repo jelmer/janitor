@@ -350,7 +350,7 @@ class PublishWorker:
             "allow_create_proposal": allow_create_proposal,
             "external_url": self.external_url,
             "differ_url": self.differ_url,
-            "revision": revision.decode("utf-8"),
+            "revision_id": revision.decode("utf-8"),
             "reviewers": reviewers,
             "commit_message_template": commit_message_template,
             "title_template": title_template,
@@ -362,7 +362,7 @@ class PublishWorker:
         else:
             request["tags"] = {}
 
-        args = [sys.executable, "-m", "janitor.publish_one"]
+        args = ["janitor-publish-one"]
 
         if self.template_env_path:
             args.append(f"--template-env-path={self.template_env_path}")
