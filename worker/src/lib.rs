@@ -233,6 +233,108 @@ pub trait Target {
     ) -> Result<Box<dyn silver_platter::CodemodResult>, WorkerFailure>;
 }
 
+/// Translate the result of opening the resume branch into either the
+/// opened branch or a WorkerFailure, mirroring the resume branch onto
+/// metadata.branch_url on a rate limit hit.
+///
+/// Pulled out of run_worker so the rate-limited arm - the one
+/// process_single_item() actually cares about, since it reads
+/// metadata.branch_url to pick which host to pass to
+/// record_rate_limited_host() - can be exercised directly in a test
+/// without opening a real branch over the network.
+fn handle_resume_branch_open(
+    result: Result<breezyshim::branch::GenericBranch, silver_platter::vcs::BranchOpenError>,
+    metadata: &mut Metadata,
+) -> Result<Option<breezyshim::branch::GenericBranch>, WorkerFailure> {
+    match result {
+        Err(silver_platter::vcs::BranchOpenError::TemporarilyUnavailable { url, description }) => {
+            let display = sanitise_url_for_log(&url);
+            log::info!(
+                "Resume branch URL {} temporarily unavailable: {}",
+                display,
+                description
+            );
+            Err(WorkerFailure {
+                code: "worker-resume-branch-temporarily-unavailable".to_owned(),
+                description,
+                stage: vec!["setup".to_owned()],
+                transient: Some(true),
+                details: Some(serde_json::json!({
+                    "url": display,
+                })),
+            })
+        }
+        Err(silver_platter::vcs::BranchOpenError::RateLimited {
+            url,
+            description,
+            retry_after,
+        }) => {
+            let display = sanitise_url_for_log(&url);
+            log::info!(
+                "Resume branch URL {} rate limited: {}",
+                display,
+                description
+            );
+            // The resume branch, not the main branch set earlier in
+            // run_worker, is what actually got rate limited here.
+            metadata.branch_url = Some(display.clone());
+            Err(WorkerFailure {
+                code: "worker-resume-branch-rate-limited".to_owned(),
+                description,
+                stage: vec!["setup".to_owned()],
+                transient: Some(true),
+                details: Some(serde_json::json!({
+                    "url": display,
+                    "retry_after": retry_after,
+                })),
+            })
+        }
+        Err(silver_platter::vcs::BranchOpenError::Unavailable {
+            url, description, ..
+        }) => {
+            let display = sanitise_url_for_log(&url);
+            log::info!("Resume branch URL {} unavailable: {}", display, description);
+            Err(WorkerFailure {
+                code: "worker-resume-branch-unavailable".to_owned(),
+                description,
+                stage: vec!["setup".to_owned()],
+                transient: Some(false),
+                details: Some(serde_json::json!({
+                    "url": display
+                })),
+            })
+        }
+        Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
+            let display = sanitise_url_for_log(&url);
+            log::info!("Resume branch URL {} missing: {}", display, description);
+            Err(WorkerFailure {
+                code: "worker-resume-branch-missing".to_owned(),
+                description,
+                stage: vec!["setup".to_owned()],
+                transient: Some(false),
+                details: Some(serde_json::json!({
+                    "url": display
+                })),
+            })
+        }
+        Err(silver_platter::vcs::BranchOpenError::Unsupported { .. }) => Err(WorkerFailure {
+            code: "worker-resume-branch-unsupported".to_owned(),
+            description: "Unsupported resume branch URL".to_owned(),
+            stage: vec!["setup".to_owned()],
+            transient: Some(false),
+            details: None,
+        }),
+        Err(silver_platter::vcs::BranchOpenError::Other(..)) => Err(WorkerFailure {
+            code: "worker-resume-branch-error".to_owned(),
+            description: "Error opening resume branch".to_owned(),
+            stage: vec!["setup".to_owned()],
+            transient: Some(false),
+            details: None,
+        }),
+        Ok(b) => Ok(Some(b)),
+    }
+}
+
 pub fn run_worker(
     codebase: &str,
     campaign: &str,
@@ -410,7 +512,7 @@ pub fn run_worker(
         );
         let probers =
             silver_platter::probers::select_probers(vcs_type.map(|v| v.to_string()).as_deref());
-        match silver_platter::vcs::open_branch(
+        let result = silver_platter::vcs::open_branch(
             resume_branch_url,
             possible_transports.as_mut(),
             Some(
@@ -421,97 +523,8 @@ pub fn run_worker(
                     .as_slice(),
             ),
             None,
-        ) {
-            Err(silver_platter::vcs::BranchOpenError::TemporarilyUnavailable {
-                url,
-                description,
-            }) => {
-                let display = sanitise_url_for_log(&url);
-                log::info!(
-                    "Resume branch URL {} temporarily unavailable: {}",
-                    display,
-                    description
-                );
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-temporarily-unavailable".to_owned(),
-                    description,
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(true),
-                    details: Some(serde_json::json!({
-                        "url": display,
-                    })),
-                });
-            }
-            Err(silver_platter::vcs::BranchOpenError::RateLimited {
-                url,
-                description,
-                retry_after,
-            }) => {
-                let display = sanitise_url_for_log(&url);
-                log::info!(
-                    "Resume branch URL {} rate limited: {}",
-                    display,
-                    description
-                );
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-rate-limited".to_owned(),
-                    description,
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(true),
-                    details: Some(serde_json::json!({
-                        "url": display,
-                        "retry_after": retry_after,
-                    })),
-                });
-            }
-            Err(silver_platter::vcs::BranchOpenError::Unavailable {
-                url, description, ..
-            }) => {
-                let display = sanitise_url_for_log(&url);
-                log::info!("Resume branch URL {} unavailable: {}", display, description);
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-unavailable".to_owned(),
-                    description,
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(false),
-                    details: Some(serde_json::json!({
-                        "url": display
-                    })),
-                });
-            }
-            Err(silver_platter::vcs::BranchOpenError::Missing { url, description }) => {
-                let display = sanitise_url_for_log(&url);
-                log::info!("Resume branch URL {} missing: {}", display, description);
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-missing".to_owned(),
-                    description,
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(false),
-                    details: Some(serde_json::json!({
-                        "url": display
-                    })),
-                });
-            }
-            Err(silver_platter::vcs::BranchOpenError::Unsupported { .. }) => {
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-unsupported".to_owned(),
-                    description: "Unsupported resume branch URL".to_owned(),
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(false),
-                    details: None,
-                });
-            }
-            Err(silver_platter::vcs::BranchOpenError::Other(..)) => {
-                return Err(WorkerFailure {
-                    code: "worker-resume-branch-error".to_owned(),
-                    description: "Error opening resume branch".to_owned(),
-                    stage: vec!["setup".to_owned()],
-                    transient: Some(false),
-                    details: None,
-                });
-            }
-            Ok(b) => Some(b),
-        }
+        );
+        handle_resume_branch_open(result, metadata)?
     } else {
         None
     };
@@ -1482,6 +1495,49 @@ mod tests {
         assert_eq!(
             state.active_rate_limited_hosts(),
             vec!["example.com".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_handle_resume_branch_open_rate_limited_records_resume_branch_host() {
+        // Regression for the resume-branch-rate-limited path recording the
+        // wrong host. metadata.branch_url starts out holding the main
+        // branch's URL, same as run_worker leaves it after opening the
+        // main branch earlier in the function. If handle_resume_branch_open
+        // doesn't overwrite it on a rate limit hit, process_single_item()
+        // goes on to call record_rate_limited_host() with the main
+        // branch's host instead of the one that was actually rate limited.
+        let mut metadata = Metadata {
+            branch_url: Some(Url::parse("https://main.example/repo").unwrap()),
+            ..Metadata::default()
+        };
+        let err = silver_platter::vcs::BranchOpenError::RateLimited {
+            url: Url::parse("https://ratelimited.example/repo").unwrap(),
+            description: "429: Too Many Requests".to_string(),
+            retry_after: Some(30.0),
+        };
+
+        let result = handle_resume_branch_open(Err(err), &mut metadata);
+
+        let failure = match result {
+            Err(failure) => failure,
+            Ok(_) => panic!("rate limit must surface as a WorkerFailure"),
+        };
+        assert_eq!(failure.code, "worker-resume-branch-rate-limited");
+
+        // What process_single_item() actually reads, verbatim: RESULT_CODES
+        // check -> metadata.branch_url.host_str() -> record_rate_limited_host().
+        metadata.update(&failure);
+        let mut state = AppState::default();
+        if RATE_LIMITED_RESULT_CODES.contains(&metadata.code.as_deref().unwrap()) {
+            if let Some(host) = metadata.branch_url.as_ref().and_then(|u| u.host_str()) {
+                state.record_rate_limited_host(host.to_string(), None);
+            }
+        }
+        assert_eq!(
+            state.active_rate_limited_hosts(),
+            vec!["ratelimited.example".to_string()],
+            "must record the branch that was actually rate limited, not the main branch"
         );
     }
 
