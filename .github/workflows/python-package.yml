@@ -7,6 +7,10 @@ name: Python package - Check, build and test
   schedule:
     - cron: '0 6 * * *'    # Daily 6AM UTC build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   # Standard packages: ./CONTRIBUTING.md (also ./Dockerfile_*)
   #   Dirty hack for the lack of YAML anchors
