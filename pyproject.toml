@@ -60,7 +60,7 @@ classifiers = [
     "Operating System :: POSIX",
     "Topic :: Software Development :: Version Control",
 ]
-urls = {Homepage = "https://github.com/jelmer/janitor"}
+urls = {Homepage = "https://github.com/janitor-team/janitor"}
 requires-python = ">=3.9"
 dependencies = [
     "aiohttp",
@@ -78,7 +78,7 @@ dependencies = [
     "breezy[git,launchpad,workspace]",
     "bs4",
     "dulwich",
-    #"gpg", # Using python3-gpg instead ~ https://github.com/jelmer/janitor/issues/931
+    #"gpg", # Using python3-gpg instead ~ https://github.com/janitor-team/janitor/issues/931
     "iso8601",
     "jinja2",
     "launchpadlib",

@@ -5,8 +5,8 @@ authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
 edition = "2021"
 description = "Automated VCS change management platform"
 license = "GPL-3.0+"
-repository = "https://github.com/jelmer/janitor.git"
-homepage = "https://github.com/jelmer/janitor"
+repository = "https://github.com/janitor-team/janitor.git"
+homepage = "https://github.com/janitor-team/janitor"
 build = "build.rs"
 include = ["src/**/*", "schema/state.sql", "schema/debian/debian.sql", "README.md"]
 

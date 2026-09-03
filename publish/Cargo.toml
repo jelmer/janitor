@@ -5,8 +5,8 @@ authors = ["Jelmer Vernooĳ <jelmer@jelmer.uk>"]
 edition.workspace = true
 description = "Publisher for the janitor"
 license = "GPL-3.0+"
-repository = "https://github.com/jelmer/janitor.git"
-homepage = "https://github.com/jelmer/janitor"
+repository = "https://github.com/janitor-team/janitor.git"
+homepage = "https://github.com/janitor-team/janitor"
 
 [dependencies]
 axum = { workspace = true }

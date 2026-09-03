@@ -78,13 +78,13 @@ File b
 
 
 def test_authenticated():
-    assert is_authenticated_url("git+ssh://git@github.com/jelmer/janitor")
-    assert is_authenticated_url("bzr+ssh://git@github.com/jelmer/janitor")
+    assert is_authenticated_url("git+ssh://git@github.com/janitor-team/janitor")
+    assert is_authenticated_url("bzr+ssh://git@github.com/janitor-team/janitor")
 
 
 def test_not_authenticated():
-    assert not is_authenticated_url("https://github.com/jelmer/janitor")
-    assert not is_authenticated_url("git://github.com/jelmer/janitor")
+    assert not is_authenticated_url("https://github.com/janitor-team/janitor")
+    assert not is_authenticated_url("git://github.com/janitor-team/janitor")
 
 
 def test_is_alioth_url():

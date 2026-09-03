@@ -2053,7 +2053,7 @@ async def handle_codebases_upload(request):
 
             # TODO(jelmer): if anything meaningful has changed (name,
             # branch_url, subpath), reschedule all runs for this codebase:
-            # https://github.com/jelmer/janitor/issues/107
+            # https://github.com/janitor-team/janitor/issues/107
 
     return web.json_response({})
 

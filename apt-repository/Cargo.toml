@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "Creating and parsing APT repositories"
 license = "Apache-2.0"
-repository = "https://github.com/jelmer/janitor.git"
-homepage = "https://github.com/jelmer/janitor"
+repository = "https://github.com/janitor-team/janitor.git"
+homepage = "https://github.com/janitor-team/janitor"
 keywords = ["apt", "debian", "package", "repository"]
 categories = ["development-tools"]
 

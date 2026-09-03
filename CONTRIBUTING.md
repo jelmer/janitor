@@ -1,4 +1,4 @@
-[The Janitor](https://github.com/jelmer/janitor) sits atop a number of other
+[The Janitor](https://github.com/janitor-team/janitor) sits atop a number of other
 projects, and those are where most of the interesting things happen.
 You may want to check out one of them.
 They're probably also easier to setup and run, unlike the Janitor.
@@ -43,7 +43,7 @@ For example, on Debian-based systems:
 ```console
 $ sudo apt install \
     python3-venv
-$ git clone https://github.com/jelmer/janitor.git
+$ git clone https://github.com/janitor-team/janitor.git
 $ cd janitor/
 $ python3 -m venv .venv
 $ . ./.venv/bin/activate

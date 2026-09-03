@@ -6,8 +6,8 @@ edition.workspace = true
 description = "Differ for the janitor - python bindings"
 publish = false
 license = "GPL-3.0+"
-repository = "https://github.com/jelmer/janitor.git"
-homepage = "https://github.com/jelmer/janitor"
+repository = "https://github.com/janitor-team/janitor.git"
+homepage = "https://github.com/janitor-team/janitor"
 
 [lib]
 crate-type = ["cdylib"]
