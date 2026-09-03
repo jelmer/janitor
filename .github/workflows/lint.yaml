@@ -58,3 +58,42 @@ jobs:
           pip3 install --break-system-packages --upgrade \
             codespell
           codespell
+
+  dco:
+    name: DCO sign-off check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Signed-off-by on all commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -e
+          missing=0
+          for sha in $(git rev-list "$BASE_SHA".."$HEAD_SHA"); do
+            author_name=$(git show -s --format='%an' "$sha")
+            author_email=$(git show -s --format='%ae' "$sha")
+            expected="Signed-off-by: ${author_name} <${author_email}>"
+            trailers=$(git show -s --format='%(trailers:key=Signed-off-by)' \
+              "$sha")
+            if ! printf '%s\n' "$trailers" | grep -Fxq "$expected"; then
+              echo "Commit $sha is missing a matching Signed-off-by trailer."
+              echo "  Author:   ${author_name} <${author_email}>"
+              echo "  Expected: ${expected}"
+              echo "  Found trailers:"
+              printf '%s\n' "$trailers" | sed 's/^/    /'
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo
+            echo "See CONTRIBUTING.md for how to sign off (git commit -s)."
+            exit 1
+          fi
