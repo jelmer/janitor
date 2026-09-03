@@ -451,3 +451,30 @@ async def test_workers_delete_unknown(aiohttp_client, db):
     client = await create_api_client(aiohttp_client, db, user=ADMIN_USER)
     resp = await client.delete("/workers/nonexistent")
     assert resp.status == 404
+
+
+def test_done_list_form_omits_action():
+    env = Environment(loader=template_loader)
+    template = env.get_template("cupboard/done-list.html")
+    rendered = template.render(
+        runs=[],
+        since=None,
+        oldest=None,
+        utcnow=datetime.utcnow,
+    )
+    assert "<form method=\"get\">" in rendered
+    assert "action=" not in rendered
+
+
+def test_generic_done_list_form_omits_action():
+    env = Environment(loader=template_loader)
+    template = env.get_template("generic/done.html")
+    rendered = template.render(
+        campaign=None,
+        runs=[],
+        since=None,
+        oldest=None,
+        utcnow=datetime.utcnow,
+    )
+    assert "<form method=\"get\">" in rendered
+    assert "action=" not in rendered
