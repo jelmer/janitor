@@ -57,6 +57,13 @@ enum Command {
         #[command(subcommand)]
         cmd: RunCmd,
     },
+    /// Browse merge proposals and refresh their status.
+    MergeProposals {
+        #[command(subcommand)]
+        cmd: MergeProposalsCmd,
+    },
+    /// Show the runner's current status.
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -227,6 +234,25 @@ struct RunScheduleArgs {
     /// Force a fresh run instead of reusing cached artifacts.
     #[arg(long)]
     refresh: bool,
+}
+
+#[derive(Subcommand)]
+enum MergeProposalsCmd {
+    /// List merge proposals, optionally restricted to a codebase or campaign.
+    List {
+        /// Restrict to this codebase.
+        #[arg(long, conflicts_with = "campaign")]
+        codebase: Option<String>,
+        /// Restrict to this campaign.
+        #[arg(long)]
+        campaign: Option<String>,
+    },
+    /// Ask the publisher to re-check a merge proposal's status (e.g. after
+    /// it was merged or closed out-of-band).
+    RefreshStatus {
+        /// Merge proposal URL.
+        url: String,
+    },
 }
 
 async fn cmd_publish_trigger(
@@ -481,6 +507,53 @@ async fn cmd_run_archive_diff(
     Ok(())
 }
 
+async fn cmd_merge_proposals_list(
+    client: &ApiClient,
+    codebase: Option<&str>,
+    campaign: Option<&str>,
+) -> Result<(), String> {
+    let path = match (codebase, campaign) {
+        (Some(codebase), _) => format!("api/c/{}/merge-proposals", codebase),
+        (None, Some(campaign)) => format!("api/{}/merge-proposals", campaign),
+        (None, None) => "api/merge-proposals".to_string(),
+    };
+    let resp = client
+        .request(reqwest::Method::GET, &path)?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
+async fn cmd_merge_proposals_refresh_status(client: &ApiClient, url: &str) -> Result<(), String> {
+    let form = [("url", url)];
+    let resp = client
+        .request(reqwest::Method::POST, "api/refresh-proposal-status")?
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    println!("{}", body.trim());
+    Ok(())
+}
+
+async fn cmd_status(client: &ApiClient) -> Result<(), String> {
+    let resp = client
+        .request(reqwest::Method::GET, "api/runner/status")?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -574,6 +647,15 @@ async fn main() -> ExitCode {
                 filter_boring,
             } => cmd_run_archive_diff(&client, &run_id, "diffoscope", filter_boring).await,
         },
+        Command::MergeProposals { cmd } => match cmd {
+            MergeProposalsCmd::List { codebase, campaign } => {
+                cmd_merge_proposals_list(&client, codebase.as_deref(), campaign.as_deref()).await
+            }
+            MergeProposalsCmd::RefreshStatus { url } => {
+                cmd_merge_proposals_refresh_status(&client, &url).await
+            }
+        },
+        Command::Status => cmd_status(&client).await,
     };
 
     match result {
@@ -945,5 +1027,65 @@ mod tests {
             }
             _ => panic!("wrong subcommand"),
         }
+    }
+
+    #[test]
+    fn cli_parses_merge_proposals_list_with_codebase() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "merge-proposals",
+            "list",
+            "--codebase",
+            "mypkg",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::MergeProposals {
+                cmd: MergeProposalsCmd::List { codebase, campaign },
+            } => {
+                assert_eq!(codebase.as_deref(), Some("mypkg"));
+                assert!(campaign.is_none());
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_rejects_merge_proposals_list_with_both_codebase_and_campaign() {
+        let result = Cli::try_parse_from([
+            "janitor-package",
+            "merge-proposals",
+            "list",
+            "--codebase",
+            "mypkg",
+            "--campaign",
+            "lintian-fixes",
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn cli_parses_merge_proposals_refresh_status() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "merge-proposals",
+            "refresh-status",
+            "https://github.com/example/mypkg/pull/1",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::MergeProposals {
+                cmd: MergeProposalsCmd::RefreshStatus { url },
+            } => {
+                assert_eq!(url, "https://github.com/example/mypkg/pull/1");
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_status() {
+        let cli = Cli::try_parse_from(["janitor-package", "status"]).unwrap();
+        assert!(matches!(cli.command, Command::Status));
     }
 }
