@@ -52,6 +52,11 @@ enum Command {
         #[command(subcommand)]
         cmd: ReviewCmd,
     },
+    /// Reschedule and inspect runs.
+    Run {
+        #[command(subcommand)]
+        cmd: RunCmd,
+    },
 }
 
 #[derive(Subcommand)]
@@ -158,6 +163,70 @@ struct NeedsReviewEntry {
     id: String,
     codebase: String,
     campaign: String,
+}
+
+#[derive(Subcommand)]
+enum RunCmd {
+    /// Reschedule a single run, keeping its existing queue bucket.
+    Reschedule(RunScheduleArgs),
+    /// Reschedule a run via the QA-reviewer queue-jump control endpoint.
+    ScheduleControl(RunScheduleArgs),
+    /// List currently active (in-progress) runs.
+    Active,
+    /// Peek at the next run that would be assigned to a worker.
+    Peek,
+    /// Show a single active run's detail.
+    Show {
+        /// Run ID.
+        run_id: String,
+    },
+    /// List, or fetch the content of, a run's log files.
+    Log {
+        /// Run ID.
+        run_id: String,
+        /// Log filename to fetch (e.g. build.log). If omitted, list the
+        /// available log filenames instead.
+        filename: Option<String>,
+    },
+    /// Show the VCS diff produced by a run.
+    Diff {
+        /// Run ID.
+        run_id: String,
+        /// Result branch role to diff (defaults to "main").
+        #[arg(long)]
+        role: Option<String>,
+    },
+    /// Show the debdiff between a run's build and the last successful,
+    /// unchanged build.
+    Debdiff {
+        /// Run ID.
+        run_id: String,
+        /// Filter out boring differences (e.g. changelog-only diffs).
+        #[arg(long)]
+        filter_boring: bool,
+    },
+    /// Show the diffoscope output between a run's build and the last
+    /// successful, unchanged build.
+    Diffoscope {
+        /// Run ID.
+        run_id: String,
+        /// Filter out boring differences.
+        #[arg(long)]
+        filter_boring: bool,
+    },
+}
+
+#[derive(clap::Args)]
+struct RunScheduleArgs {
+    /// Run ID.
+    run_id: String,
+    /// Schedule offset. May be negative to move a run closer to the top of
+    /// the queue.
+    #[arg(long, allow_hyphen_values = true)]
+    offset: Option<f64>,
+    /// Force a fresh run instead of reusing cached artifacts.
+    #[arg(long)]
+    refresh: bool,
 }
 
 async fn cmd_publish_trigger(
@@ -276,6 +345,142 @@ async fn cmd_review_needs_review(
     Ok(())
 }
 
+/// Shared implementation of `run reschedule` and `run schedule-control`:
+/// both post the same `offset`/`refresh` form to a run-scoped path and get
+/// back a scheduling result.
+async fn cmd_run_schedule(
+    client: &ApiClient,
+    path: &str,
+    offset: Option<f64>,
+    refresh: bool,
+) -> Result<(), String> {
+    let mut form: Vec<(&str, String)> = vec![("refresh", if refresh { "1" } else { "0" }.to_string())];
+    if let Some(offset) = offset {
+        form.push(("offset", offset.to_string()));
+    }
+    let resp = client
+        .request(reqwest::Method::POST, path)?
+        .form(&form)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
+async fn cmd_run_active(client: &ApiClient) -> Result<(), String> {
+    let resp = client
+        .request(reqwest::Method::GET, "api/active-runs")?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
+async fn cmd_run_peek(client: &ApiClient) -> Result<(), String> {
+    let resp = client
+        .request(reqwest::Method::GET, "api/active-runs/+peek")?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
+async fn cmd_run_show(client: &ApiClient, run_id: &str) -> Result<(), String> {
+    let path = format!("api/active-runs/{}", run_id);
+    let resp = client
+        .request(reqwest::Method::GET, &path)?
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body: Value = resp.json().await.map_err(|e| e.to_string())?;
+    println!("{}", serde_json::to_string_pretty(&body).unwrap());
+    Ok(())
+}
+
+async fn cmd_run_log(
+    client: &ApiClient,
+    run_id: &str,
+    filename: Option<&str>,
+) -> Result<(), String> {
+    match filename {
+        None => {
+            let path = format!("api/active-runs/{}/log/", run_id);
+            let resp = client
+                .request(reqwest::Method::GET, &path)?
+                .header(reqwest::header::ACCEPT, "application/json")
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let resp = expect_success(resp).await?;
+            let filenames: Vec<String> = resp.json().await.map_err(|e| e.to_string())?;
+            if filenames.is_empty() {
+                println!("No log files for run {}.", run_id);
+            }
+            for filename in filenames {
+                println!("{}", filename);
+            }
+            Ok(())
+        }
+        Some(filename) => {
+            let path = format!("api/active-runs/{}/log/{}", run_id, filename);
+            let resp = client
+                .request(reqwest::Method::GET, &path)?
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+            let resp = expect_success(resp).await?;
+            let body = resp.text().await.map_err(|e| e.to_string())?;
+            print!("{}", body);
+            Ok(())
+        }
+    }
+}
+
+async fn cmd_run_diff(client: &ApiClient, run_id: &str, role: Option<&str>) -> Result<(), String> {
+    let path = match role {
+        Some(role) => format!("api/run/{}/diff/{}", run_id, role),
+        None => format!("api/run/{}/diff", run_id),
+    };
+    let resp = client
+        .request(reqwest::Method::GET, &path)?
+        .header(reqwest::header::ACCEPT, "text/x-diff")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    print!("{}", body);
+    Ok(())
+}
+
+async fn cmd_run_archive_diff(
+    client: &ApiClient,
+    run_id: &str,
+    kind: &str,
+    filter_boring: bool,
+) -> Result<(), String> {
+    let path = format!("api/run/{}/{}", run_id, kind);
+    let mut req = client.request(reqwest::Method::GET, &path)?;
+    if filter_boring {
+        req = req.query(&[("filter_boring", "1")]);
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let resp = expect_success(resp).await?;
+    let body = resp.text().await.map_err(|e| e.to_string())?;
+    print!("{}", body);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let cli = Cli::parse();
@@ -333,6 +538,41 @@ async fn main() -> ExitCode {
                 )
                 .await
             }
+        },
+        Command::Run { cmd } => match cmd {
+            RunCmd::Reschedule(RunScheduleArgs {
+                run_id,
+                offset,
+                refresh,
+            }) => {
+                let path = format!("api/run/{}/reschedule", run_id);
+                cmd_run_schedule(&client, &path, offset, refresh).await
+            }
+            RunCmd::ScheduleControl(RunScheduleArgs {
+                run_id,
+                offset,
+                refresh,
+            }) => {
+                let path = format!("api/run/{}/schedule-control", run_id);
+                cmd_run_schedule(&client, &path, offset, refresh).await
+            }
+            RunCmd::Active => cmd_run_active(&client).await,
+            RunCmd::Peek => cmd_run_peek(&client).await,
+            RunCmd::Show { run_id } => cmd_run_show(&client, &run_id).await,
+            RunCmd::Log { run_id, filename } => {
+                cmd_run_log(&client, &run_id, filename.as_deref()).await
+            }
+            RunCmd::Diff { run_id, role } => {
+                cmd_run_diff(&client, &run_id, role.as_deref()).await
+            }
+            RunCmd::Debdiff {
+                run_id,
+                filter_boring,
+            } => cmd_run_archive_diff(&client, &run_id, "debdiff", filter_boring).await,
+            RunCmd::Diffoscope {
+                run_id,
+                filter_boring,
+            } => cmd_run_archive_diff(&client, &run_id, "diffoscope", filter_boring).await,
         },
     };
 
@@ -528,6 +768,180 @@ mod tests {
                 assert_eq!(publishable_only, Some(false));
                 assert_eq!(required_only, Some(true));
                 assert_eq!(limit, 10);
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_reschedule_with_offset_and_refresh() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "reschedule",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+            "--offset",
+            "-5",
+            "--refresh",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd:
+                    RunCmd::Reschedule(RunScheduleArgs {
+                        run_id,
+                        offset,
+                        refresh,
+                    }),
+            } => {
+                assert_eq!(run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
+                assert_eq!(offset, Some(-5.0));
+                assert!(refresh);
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_schedule_control() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "schedule-control",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::ScheduleControl(args),
+            } => {
+                assert_eq!(args.run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
+                assert!(args.offset.is_none());
+                assert!(!args.refresh);
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_log_with_and_without_filename() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "log",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Log { run_id, filename },
+            } => {
+                assert_eq!(run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
+                assert!(filename.is_none());
+            }
+            _ => panic!("wrong subcommand"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "log",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+            "build.log",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Log { filename, .. },
+            } => {
+                assert_eq!(filename.as_deref(), Some("build.log"));
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_diff_with_role() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "diff",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+            "--role",
+            "upstream",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Diff { run_id, role },
+            } => {
+                assert_eq!(run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
+                assert_eq!(role.as_deref(), Some("upstream"));
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_debdiff_and_diffoscope_with_filter_boring() {
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "debdiff",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+            "--filter-boring",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Debdiff {
+                    run_id,
+                    filter_boring,
+                },
+            } => {
+                assert_eq!(run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
+                assert!(filter_boring);
+            }
+            _ => panic!("wrong subcommand"),
+        }
+
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "diffoscope",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Diffoscope { filter_boring, .. },
+            } => {
+                assert!(!filter_boring);
+            }
+            _ => panic!("wrong subcommand"),
+        }
+    }
+
+    #[test]
+    fn cli_parses_run_active_peek_and_show() {
+        let cli = Cli::try_parse_from(["janitor-package", "run", "active"]).unwrap();
+        assert!(matches!(cli.command, Command::Run { cmd: RunCmd::Active }));
+
+        let cli = Cli::try_parse_from(["janitor-package", "run", "peek"]).unwrap();
+        assert!(matches!(cli.command, Command::Run { cmd: RunCmd::Peek }));
+
+        let cli = Cli::try_parse_from([
+            "janitor-package",
+            "run",
+            "show",
+            "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Run {
+                cmd: RunCmd::Show { run_id },
+            } => {
+                assert_eq!(run_id, "a1b2c3d4-5f6a-4b3c-9d8e-1234567890ab");
             }
             _ => panic!("wrong subcommand"),
         }
