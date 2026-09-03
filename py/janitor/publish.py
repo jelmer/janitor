@@ -1709,7 +1709,11 @@ async def publish_request(request):
 @routes.get("/credentials", name="credentials")
 async def credentials_request(request):
     ssh_keys = []
-    for entry in os.scandir(os.path.expanduser("~/.ssh")):
+    try:
+        ssh_dir_entries = list(os.scandir(os.path.expanduser("~/.ssh")))
+    except (FileNotFoundError, NotADirectoryError):
+        ssh_dir_entries = []
+    for entry in ssh_dir_entries:
         if entry.name.endswith(".pub"):
             with open(entry.path) as f:
                 ssh_keys.extend([line.strip() for line in f.readlines()])
