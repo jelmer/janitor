@@ -2631,12 +2631,16 @@ async def next_item(
                 logging.debug("Error opening branch %s: %s", vcs_info["branch_url"], e)
                 resume_branch = None
                 additional_colocated_branches = None
-                vcs_type = vcs_info.get("vcs_type")
+                # The branch never actually opened, so there is nothing to
+                # autodetect from here - the worker retries the open itself
+                # and does its own detection then. This is only a stand-in
+                # for target_repository/metadata purposes in the meantime.
+                vcs_type = vcs_info.get("vcs_type") or DEFAULT_VCS_TYPE
             except asyncio.TimeoutError:
                 logging.debug("Timeout opening branch %s", vcs_info["branch_url"])
                 resume_branch = None
                 additional_colocated_branches = None
-                vcs_type = vcs_info.get("vcs_type")
+                vcs_type = vcs_info.get("vcs_type") or DEFAULT_VCS_TYPE
             else:
                 # We try the public branch first, since perhaps a maintainer
                 # has made changes to the branch there.
@@ -2747,7 +2751,11 @@ async def next_item(
                 vcs_manager = queue_processor.public_vcs_managers[vcs_type]
             except KeyError:
                 cached_branch_url = None
-                target_repository_url = None
+                # Results get pushed to git_store regardless of whether
+                # the source vcs_type resolved, so fall back instead of None.
+                target_repository_url = queue_processor.public_vcs_managers[
+                    DEFAULT_VCS_TYPE
+                ].get_repository_url(item.codebase)
             else:
                 cached_branch_url = vcs_manager.get_branch_url(
                     item.codebase, branch_name
@@ -2755,7 +2763,9 @@ async def next_item(
                 target_repository_url = vcs_manager.get_repository_url(item.codebase)
     except UnsupportedVcs:
         cached_branch_url = None
-        target_repository_url = None
+        target_repository_url = queue_processor.public_vcs_managers[
+            DEFAULT_VCS_TYPE
+        ].get_repository_url(item.codebase)
 
     env: dict[str, str] = {}
     env.update(build_env)
@@ -2773,7 +2783,7 @@ async def next_item(
             "default-empty": campaign_config.default_empty,
             "url": vcs_info.get("branch_url"),
             "subpath": vcs_info.get("subpath"),
-            "vcs_type": vcs_info.get("vcs_type"),
+            "vcs_type": vcs_type,
             "cached_url": cached_branch_url,
             # normalize to a list - the worker requires Vec<String>, not a dict
             "additional_colocated_branches": (
@@ -2797,7 +2807,7 @@ async def next_item(
         "skip-setup-validation": campaign_config.skip_setup_validation,
         "target_repository": {
             "url": target_repository_url,
-            "vcs_type": vcs_info.get("vcs_type"),
+            "vcs_type": vcs_type,
         },
     }
 
