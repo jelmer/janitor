@@ -316,8 +316,7 @@ SELECT
   finish_time - start_time as duration,
   result_code,
   description,
-  failure_details,
-  change_set
+  failure_details
 FROM run
 WHERE
 """ + " AND ".join(where)
