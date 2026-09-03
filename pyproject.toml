@@ -139,6 +139,11 @@ site = [
     "python-debian",
 ]
 
+# djlint ($ make djlint)
+lint = [
+    "djlint==1.44.2",
+]
+
 # mypy ($ make typing)
 typing = [
     "mypy",
