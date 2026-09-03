@@ -375,7 +375,9 @@ pub fn run_worker(
                 None
             }
             Err(
-                silver_platter::vcs::BranchOpenError::Unavailable { url, description }
+                silver_platter::vcs::BranchOpenError::Unavailable {
+                    url, description, ..
+                }
                 | silver_platter::vcs::BranchOpenError::TemporarilyUnavailable { url, description },
             ) => {
                 log::info!(
@@ -462,7 +464,9 @@ pub fn run_worker(
                     })),
                 });
             }
-            Err(silver_platter::vcs::BranchOpenError::Unavailable { url, description }) => {
+            Err(silver_platter::vcs::BranchOpenError::Unavailable {
+                url, description, ..
+            }) => {
                 let display = sanitise_url_for_log(&url);
                 log::info!("Resume branch URL {} unavailable: {}", display, description);
                 return Err(WorkerFailure {

@@ -305,6 +305,7 @@ mod tests {
         let err = BranchOpenError::Unavailable {
             url: Url::parse("https://anonscm.debian.org/repo").unwrap(),
             description: "Connection refused".to_string(),
+            http_status: None,
         };
         let failure =
             convert_branch_exception(&Url::parse("https://anonscm.debian.org/repo").unwrap(), err);
@@ -319,6 +320,7 @@ mod tests {
                 "Unexpected HTTP status: https://example.com/repo/info/refs?service=git-upload-pack \
                  401: Unable to handle http code: Unauthorized"
                     .to_string(),
+            http_status: Some(401),
         };
         let failure =
             convert_branch_exception(&Url::parse("https://example.com/repo").unwrap(), err);
@@ -328,14 +330,15 @@ mod tests {
     #[test]
     fn test_convert_branch_exception_unavailable_503() {
         // Captured from live retries against salsa.debian.org rate-limiting
-        // bsdgames/lolcat: the status code sits between the URL and "Unable
-        // to handle", not folded into a single "http code 503: ..." phrase.
+        // bsdgames/lolcat. http_status comes from breezy's own structured
+        // status code (silver-platter#642), not scraped from this text.
         let err = BranchOpenError::Unavailable {
             url: Url::parse("https://salsa.debian.org/debian/lolcat.git").unwrap(),
             description:
                 "Unexpected HTTP status: https://salsa.debian.org/debian/lolcat.git/info/refs\
                  ?service=git-upload-pack 503: Unable to handle http code: Service Unavailable"
                     .to_string(),
+            http_status: Some(503),
         };
         let failure = convert_branch_exception(
             &Url::parse("https://salsa.debian.org/debian/lolcat.git").unwrap(),
@@ -346,15 +349,16 @@ mod tests {
 
     #[test]
     fn test_convert_branch_exception_unavailable_429() {
-        // Same format as the 503 case above, with the 429 code and its own
-        // reason phrase - the old code matched a hardcoded "http code 429:
-        // Too Many Requests" phrase that this shape never contains.
+        // Same live shape as the 503 case above. http_status comes from
+        // breezy's own structured status code (silver-platter#642), not
+        // scraped from this text.
         let err = BranchOpenError::Unavailable {
             url: Url::parse("https://salsa.debian.org/debian/bsdgames.git").unwrap(),
             description:
                 "Unexpected HTTP status: https://salsa.debian.org/debian/bsdgames.git/info/refs\
                  ?service=git-upload-pack 429: Unable to handle http code: Too Many Requests"
                     .to_string(),
+            http_status: Some(429),
         };
         let failure = convert_branch_exception(
             &Url::parse("https://salsa.debian.org/debian/bsdgames.git").unwrap(),
@@ -391,32 +395,6 @@ mod tests {
         let failure = convert_branch_exception(&Url::parse("https://example.com").unwrap(), err);
         assert_eq!(failure.code, "unknown");
         assert_eq!(failure.description, "something weird");
-    }
-
-    #[test]
-    fn test_convert_branch_exception_other_429_from_unclassified_breezy_error() {
-        // silver-platter's BranchOpenError::from_err has no match arm for
-        // breezyshim::error::Error::UnexpectedHttpStatus (only for the
-        // separate InvalidHttpResponse variant), so a live salsa.debian.org
-        // 429 during the initial info/refs probe falls through its `_ =>
-        // Self::Other(e.to_string())` catch-all instead of arriving as
-        // Unavailable. Description captured verbatim from a production
-        // worker failure against cmatrix; the description text is identical
-        // to the Unavailable-429 shape, but the variant is Other, which
-        // convert_branch_exception used to stamp "unknown" without ever
-        // inspecting it.
-        let description = "Unexpected HTTP status: \
-             https://salsa.debian.org/debian/cmatrix.git/info/refs\
-             ?service=git-upload-pack 429: Unable to handle http code: \
-             Too Many Requests"
-            .to_string();
-        let err = BranchOpenError::Other(description.clone());
-        let failure = convert_branch_exception(
-            &Url::parse("https://salsa.debian.org/debian/cmatrix.git").unwrap(),
-            err,
-        );
-        assert_eq!(failure.code, "too-many-requests");
-        assert_eq!(failure.description, description);
     }
 
     #[test]
@@ -579,21 +557,6 @@ pub fn open_branch_ext_with_trace(
     }
 }
 
-/// Pull an HTTP status code out of a branch-open error description.
-///
-/// breezy's own formatting isn't consistent about where the code sits
-/// relative to the URL and the reason phrase - e.g. "Unable to handle
-/// http code 429: Too Many Requests" vs. "Unexpected HTTP status: <url>
-/// 503: Unable to handle http code: Service Unavailable" - but in every
-/// observed shape the code itself appears as a bare token immediately
-/// followed by a colon, so look for that instead of matching a whole
-/// hardcoded phrase.
-fn extract_http_status(description: &str) -> Option<u16> {
-    description
-        .split_whitespace()
-        .find_map(|token| token.strip_suffix(':').and_then(|d| d.parse::<u16>().ok()))
-}
-
 fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFailure {
     match e {
         BranchOpenError::RateLimited {
@@ -606,9 +569,11 @@ fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFail
             retry_after: retry_after.map(|x| chrono::Duration::seconds(x as i64)),
         },
         BranchOpenError::Unavailable {
-            ref description, ..
+            ref description,
+            http_status,
+            ..
         } => {
-            let status = extract_http_status(description);
+            let status = http_status;
             let code = if matches!(status, Some(429)) && description.contains("Too Many Requests")
                 || matches!(status, Some(503)) && description.contains("Service Unavailable")
             {
@@ -689,29 +654,11 @@ fn convert_branch_exception(vcs_url: &Url, e: BranchOpenError) -> BranchOpenFail
                 retry_after: None,
             }
         }
-        BranchOpenError::Other(ref description) => {
-            // silver-platter's BranchOpenError::from_err has no match arm
-            // for breezyshim::error::Error::UnexpectedHttpStatus (only for
-            // the separate InvalidHttpResponse variant), so a 429/503 from
-            // the initial info/refs probe against salsa.debian.org lands
-            // here instead of in the Unavailable arm above, carrying the
-            // exact same "Unexpected HTTP status: <url> <code>: <extra>"
-            // text. Apply the same status-code check rather than stamping
-            // "unknown" without looking at the description.
-            let status = extract_http_status(description);
-            let code = if matches!(status, Some(429)) && description.contains("Too Many Requests")
-                || matches!(status, Some(503)) && description.contains("Service Unavailable")
-            {
-                "too-many-requests"
-            } else {
-                "unknown"
-            };
-            BranchOpenFailure {
-                code: code.to_string(),
-                description: description.clone(),
-                retry_after: None,
-            }
-        }
+        BranchOpenError::Other(ref description) => BranchOpenFailure {
+            code: "unknown".to_string(),
+            description: description.clone(),
+            retry_after: None,
+        },
     }
 }
 
