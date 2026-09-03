@@ -38,8 +38,13 @@ jobs:
         if: always()
         run: |
           set -x
-          pip3 install --break-system-packages --upgrade \
-            djlint
+          PIN=$(python3 -c '
+          import tomllib
+          deps = tomllib.load(open("pyproject.toml", "rb"))
+          deps = deps["project"]["optional-dependencies"]["lint"]
+          print(next(d for d in deps if d.startswith("djlint")))
+          ')
+          pip3 install --break-system-packages --upgrade "$PIN"
           make djlint
 
   codespell:
