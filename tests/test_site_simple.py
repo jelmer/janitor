@@ -160,3 +160,37 @@ async def test_webhook_github_push_reschedules_without_crashing(
     assert resp.status == 200, await resp.text()
     body = await resp.json()
     assert "https://github.com/jelmer/example" in body["urls"]
+
+
+async def test_candidates_with_multiple_unscored_does_not_500(
+    aiohttp_client, database_location
+):
+    # The candidates page loads fine with two or more unscored candidates.
+    conn = await asyncpg.connect(database_location)
+    try:
+        await conn.execute(
+            "INSERT INTO codebase (name, branch_url, url, vcs_type) VALUES "
+            "($1, $2, $2, $3), ($4, $5, $5, $3)",
+            "foo",
+            "https://example.com/foo.git",
+            "git",
+            "bar",
+            "https://example.com/bar.git",
+        )
+        await conn.execute(
+            "INSERT INTO candidate (codebase, suite, command) VALUES "
+            "($1, $2, $3), ($4, $2, $3)",
+            "foo",
+            "lintian-fixes",
+            "true",
+            "bar",
+        )
+    finally:
+        await conn.close()
+
+    _private_app, app = await create_app(
+        config=create_config(database_location), redis=FakeRedis()
+    )
+    client = await aiohttp_client(app)
+    resp = await client.get("/lintian-fixes/candidates")
+    assert resp.status == 200
