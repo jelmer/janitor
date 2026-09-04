@@ -506,6 +506,13 @@ pub fn publish(
         }
     }
 
+    // publish_changes() needs to take its own write lock on target_branch -
+    // holding a read lock across that call makes breezy's git branch refuse
+    // to escalate (ReadOnlyError: already locked for reading), so release
+    // both locks as soon as the conflict check that needed them is done.
+    std::mem::drop(target_lock);
+    std::mem::drop(source_lock);
+
     let labels = if forge
         .as_ref()
         .map(|x| x.supports_merge_proposal_labels())
@@ -618,8 +625,6 @@ pub fn publish(
             description: "No changes to propose; changes made independently upstream?".to_string(),
         }),
         Ok(publish_result) => {
-            std::mem::drop(target_lock);
-            std::mem::drop(source_lock);
             Ok((
                 PublishOneResult {
                     mode,
