@@ -52,6 +52,7 @@ RUN apt-get update --yes \
         git \
         libssl3 \
         libzstd1 \
+        openssh-client \
         python3-gpg \
         python3 \
  && apt-get clean
