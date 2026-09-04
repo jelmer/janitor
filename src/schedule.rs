@@ -50,17 +50,17 @@ SELECT
   codebase.name AS codebase,
   codebase.branch_url AS branch_url,
   candidate.suite AS campaign,
-  candidate.context AS context,
-  candidate.value AS value,
-  candidate.success_chance AS success_chance,
-  array_agg(named_publish_policy.per_branch_policy.mode) AS publish_modes,
+  coalesce(candidate.context, '') AS context,
+  candidate.value::bigint AS value,
+  coalesce(candidate.success_chance, 1.0) AS success_chance,
+  coalesce(array_agg(branch_publish_policy.mode) FILTER (WHERE branch_publish_policy.mode IS NOT NULL), '{}')::text[] AS publish_modes,
   candidate.command AS command,
   candidate.change_set AS change_set
 FROM candidate
 INNER JOIN codebase on codebase.name = candidate.codebase
 INNER JOIN named_publish_policy ON
     named_publish_policy.name = candidate.publish_policy
-INNER JOIN branch_publish_policy ON branch_publish_policy.role = ANY(named_publish_policy.per_branch_policy)
+LEFT JOIN LATERAL unnest(named_publish_policy.per_branch_policy) AS branch_publish_policy ON true
 "###,
     );
     if let Some(codebases) = codebases {
@@ -72,6 +72,10 @@ INNER JOIN branch_publish_policy ON branch_publish_policy.role = ANY(named_publi
         query.push(" AND candidate.suite = ");
         query.push_bind(campaign);
     }
+    query.push(
+        " GROUP BY codebase.name, codebase.branch_url, candidate.suite, candidate.context, \
+           candidate.value, candidate.success_chance, candidate.command, candidate.change_set",
+    );
 
     let query = query.build();
 
@@ -427,7 +431,7 @@ pub async fn bulk_add_to_queue(
 ) -> Result<(), Error> {
     let bucket = bucket.unwrap_or("default");
     let mut codebase_values = sqlx::query_as::<_, (String, f64)>(
-        "SELECT name, coalesce(value, 0) FROM codebase WHERE name IS NOT NULL",
+        "SELECT name, coalesce(value, 0)::float8 FROM codebase WHERE name IS NOT NULL",
     )
     .fetch_all(conn)
     .await?
@@ -867,6 +871,97 @@ mod tests {
         assert!(MINIMUM_COST > 0.0);
         assert!(MINIMUM_NORMALIZED_CODEBASE_VALUE > 0.0);
         assert!(DEFAULT_NORMALIZED_CODEBASE_VALUE > MINIMUM_NORMALIZED_CODEBASE_VALUE);
+    }
+
+    /// A candidate whose named publish policy has no per-branch entries
+    /// (`per_branch_policy` is `NULL`) is still returned, with no
+    /// publish-mode value added to its base value - it must not be dropped
+    /// by the join against `branch_publish_policy`.
+    #[cfg(feature = "testing")]
+    #[tokio::test]
+    async fn test_iter_schedule_requests_from_candidates_empty_publish_policy() {
+        let database_url = std::env::var("DATABASE_URL")
+            .expect("DATABASE_URL must be set to run `testing`-feature database tests");
+        let admin_pool = PgPool::connect(&database_url).await.unwrap();
+
+        let db_name = format!(
+            "janitor_schedule_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        sqlx::query(&format!(r#"CREATE DATABASE "{db_name}""#))
+            .execute(&admin_pool)
+            .await
+            .unwrap();
+
+        let mut db_url = url::Url::parse(&database_url).unwrap();
+        db_url.set_path(&db_name);
+        let pool = PgPool::connect(db_url.as_str()).await.unwrap();
+        crate::schema::setup_test_database(&pool).await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO named_publish_policy (name, per_branch_policy) VALUES \
+             ('with-branches', ARRAY[ROW('main', 'push', NULL)::branch_publish_policy]), \
+             ('without-branches', NULL)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO codebase (name, branch_url, url, vcs_type) VALUES \
+             ('with-policy', 'https://example.com/with', 'https://example.com/with', 'git'), \
+             ('without-policy', 'https://example.com/without', 'https://example.com/without', 'git')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO candidate (suite, codebase, publish_policy, command, value) VALUES \
+             ('lintian-fixes', 'with-policy', 'with-branches', 'true', 10), \
+             ('lintian-fixes', 'without-policy', 'without-branches', 'true', 20)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let requests: Vec<_> = iter_schedule_requests_from_candidates(&pool, None, None)
+            .await
+            .unwrap()
+            .collect();
+
+        pool.close().await;
+        sqlx::query(&format!(r#"DROP DATABASE "{db_name}""#))
+            .execute(&admin_pool)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            requests.len(),
+            2,
+            "candidate with an empty publish policy must still be scheduled, not dropped by the join"
+        );
+
+        let with_policy = requests
+            .iter()
+            .find(|r| r.codebase == "with-policy")
+            .expect("candidate backed by a non-empty publish policy is present");
+        let without_policy = requests
+            .iter()
+            .find(|r| r.codebase == "without-policy")
+            .expect("candidate backed by an empty publish policy is present");
+
+        // Base value (10) plus the push-mode bonus from the single per-branch entry.
+        assert_eq!(with_policy.value, 510);
+        // No per-branch entries means no publish-mode bonus: base value is untouched.
+        assert_eq!(without_policy.value, 20);
+        // Nullable columns are coalesced to match ScheduleRequest's non-Option fields.
+        assert_eq!(with_policy.context, "");
+        assert_eq!(with_policy.success_chance, 1.0);
     }
 }
 
