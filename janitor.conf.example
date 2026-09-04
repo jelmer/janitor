@@ -97,8 +97,9 @@ campaign {
   # force_build: false
   # Skip the pre-build setup validation step. Optional; defaults to false.
   # skip_setup_validation: false
-  # Treat "no changes" as an expected outcome rather than an error for this
-  # campaign. Optional; defaults to false.
+  # Allow this campaign to run against codebases with no known VCS branch,
+  # starting from an empty tree instead of aborting as not-in-vcs. Optional;
+  # defaults to false.
   # default_empty: false
 }
 
