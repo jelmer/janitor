@@ -15,10 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import gpg
+import pytest
 from aiohttp.test_utils import make_mocked_request
 
 from janitor.publish import credentials_request
+
+gpg = pytest.importorskip("gpg")
 
 
 async def test_credentials_no_ssh_dir(tmp_path, monkeypatch):
