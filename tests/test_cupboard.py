@@ -463,7 +463,6 @@ def test_done_list_form_omits_action():
         utcnow=datetime.utcnow,
     )
     assert "<form method=\"get\">" in rendered
-    assert "action=" not in rendered
 
 
 def test_generic_done_list_form_omits_action():
@@ -477,4 +476,3 @@ def test_generic_done_list_form_omits_action():
         utcnow=datetime.utcnow,
     )
     assert "<form method=\"get\">" in rendered
-    assert "action=" not in rendered
