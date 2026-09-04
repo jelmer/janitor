@@ -87,7 +87,7 @@ dependencies = [
     "python-mimeparse",
     "redis>=4.2.0",
     "setuptools-rust",
-    "silver-platter",
+    "silver-platter @ git+https://github.com/caretaker-janitor/silver-platter@fix-dromedary-permission-denied-import",  # jelmer/silver-platter#643, not yet merged
     "uvloop",
     "yarl",
 ]
@@ -183,7 +183,7 @@ debian = [
     "iniparse",
     "ognibuild[debian,dep_server]",
     "python-debian",
-    "silver-platter[debian]",
+    "silver-platter[debian] @ git+https://github.com/caretaker-janitor/silver-platter@fix-dromedary-permission-denied-import",  # jelmer/silver-platter#643, not yet merged
 ]
 
 # Google Cloud Platform
