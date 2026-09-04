@@ -506,10 +506,8 @@ pub fn publish(
         }
     }
 
-    // publish_changes() needs to take its own write lock on target_branch -
-    // holding a read lock across that call makes breezy's git branch refuse
-    // to escalate (ReadOnlyError: already locked for reading), so release
-    // both locks as soon as the conflict check that needed them is done.
+    // Drop before publish_changes(), which takes its own write lock on
+    // target_branch; breezy's git branches can't escalate read to write.
     std::mem::drop(target_lock);
     std::mem::drop(source_lock);
 
