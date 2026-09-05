@@ -17,6 +17,7 @@
 
 from datetime import datetime, timedelta
 
+import aiohttp_jinja2
 from aiohttp import web
 from jinja2 import Environment
 from yarl import URL
@@ -24,6 +25,7 @@ from yarl import URL
 from janitor.config import read_string as read_config_string
 from janitor.runner import store_change_set, store_run
 from janitor.site import (
+    TEMPLATE_ENV,
     classify_result_code,
     format_duration,
     format_timestamp,
@@ -57,6 +59,10 @@ async def create_client(aiohttp_client, db):
     )
     app["external_url"] = URL("http://example.com/")
     app.middlewares.insert(0, dummy_user_middleware)
+    # production wires these templates through janitor.site.simple's app,
+    # whose jinja env carries TEMPLATE_ENV - cupboard's own create_app()
+    # here is otherwise missing format_timestamp/format_duration/etc.
+    aiohttp_jinja2.get_env(app).globals.update(TEMPLATE_ENV)
     return await aiohttp_client(app)
 
 
@@ -108,6 +114,29 @@ async def test_history(aiohttp_client, db):
     client = await create_client(aiohttp_client, db)
     resp = await client.get("/cupboard/history")
     assert resp.status == 200
+    text = await resp.text()
+    assert "the pipeline may never have been given any candidates" in text
+    assert "<table" not in text
+
+
+async def test_history_with_runs(aiohttp_client, db):
+    client = await create_client(aiohttp_client, db)
+    async with db.acquire() as conn:
+        await _insert_codebase(conn, "foo")
+        now = datetime.utcnow()
+        await _insert_run(
+            conn,
+            run_id="somerun",
+            codebase="foo",
+            start_time=now - timedelta(minutes=30),
+            finish_time=now,
+        )
+
+    resp = await client.get("/cupboard/history")
+    assert resp.status == 200
+    text = await resp.text()
+    assert "the pipeline may never have been given any candidates" not in text
+    assert "<table" in text
 
 
 async def test_queue(aiohttp_client, db):
