@@ -1558,7 +1558,9 @@ class QueueProcessor:
         active_run_count = await self.active_run_count()
         return (
             position,
-            (wait_time / active_run_count) if wait_time is not None else None,
+            (wait_time / active_run_count)
+            if wait_time is not None and active_run_count
+            else None,
             wait_time,
         )
 

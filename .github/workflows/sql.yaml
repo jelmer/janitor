@@ -9,6 +9,10 @@ name: SQL - Check database
   schedule:
     - cron: '0 6 * * *'  # Daily 6AM UTC build
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Test SQL
