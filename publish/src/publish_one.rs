@@ -325,7 +325,11 @@ pub fn publish_one(
     };
 
     let debdiff =
-        match crate::get_debdiff(&request.differ_url, &request.unchanged_id, &request.log_id) {
+        match crate::get_debdiff(
+            &request.differ_url,
+            request.unchanged_id.as_deref(),
+            &request.log_id,
+        ) {
             Ok(debdiff) => Some(debdiff),
             Err(crate::DebdiffError::Unavailable(e)) => {
                 return Err(PublishError::Failure {
@@ -354,6 +358,24 @@ pub fn publish_one(
                             code: "missing-build-diff-control".to_string(),
                         });
                     }
+                }
+                None
+            }
+            Err(crate::DebdiffError::NoUnchangedRun) => {
+                // Expected for a codebase's first run: there's no earlier
+                // build to diff against yet, not a run that failed to
+                // publish. Only actually blocks publishing when a binary
+                // diff is required.
+                if [Mode::Propose, Mode::AttemptPush].contains(&request.mode)
+                    && request.require_binary_diff
+                {
+                    return Err(PublishError::Failure {
+                        description:
+                            "Binary debdiff is not available: no earlier run exists yet \
+                             to compare against."
+                                .to_string(),
+                        code: "missing-build-diff-control".to_string(),
+                    });
                 }
                 None
             }
